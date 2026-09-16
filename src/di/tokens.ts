@@ -9,6 +9,8 @@ export const TOKENS = {
   CustomersRepository: Symbol('CustomersRepository'),
   RestaurantUsersRepository: Symbol('RestaurantUsersRepository'),
   MembershipsRepository: Symbol('MembershipsRepository'),
+  RestaurantsRepository: Symbol('RestaurantsRepository'),
+  OpeningHoursRepository: Symbol('OpeningHoursRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
   SignInCustomerUseCase: Symbol('SignInCustomerUseCase'),
@@ -17,5 +19,10 @@ export const TOKENS = {
   SignUpRestaurantUserUseCase: Symbol('SignUpRestaurantUserUseCase'),
   SignInRestaurantUserUseCase: Symbol('SignInRestaurantUserUseCase'),
   CreateMemberUseCase: Symbol('CreateMemberUseCase'),
-  ListMyRestaurantsUseCase: Symbol('ListMyRestaurantsUseCase')
+  ListMyRestaurantsUseCase: Symbol('ListMyRestaurantsUseCase'),
+  CreateRestaurantUseCase: Symbol('CreateRestaurantUseCase'),
+  GetRestaurantUseCase: Symbol('GetRestaurantUseCase'),
+  UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
+  ListOpeningHoursUseCase: Symbol('ListOpeningHoursUseCase'),
+  ReplaceOpeningHoursUseCase: Symbol('ReplaceOpeningHoursUseCase')
 } as const

@@ -24,6 +24,8 @@ import { registerSwagger } from './plugins/swagger.js'
 import { registerCustomerAuthRoutes, registerRestaurantAuthRoutes } from './routes/auth.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerMemberRoutes } from './routes/members.js'
+import { registerOpeningHoursRoutes } from './routes/opening-hours.js'
+import { registerRestaurantRoutes } from './routes/restaurants.js'
 
 export type App = FastifyInstance<
   RawServerDefault,
@@ -88,6 +90,8 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerCustomerAuthRoutes(app, container)
   registerRestaurantAuthRoutes(app, container)
   registerMemberRoutes(app, container)
+  registerRestaurantRoutes(app, container)
+  registerOpeningHoursRoutes(app, container)
 
   return app
 }

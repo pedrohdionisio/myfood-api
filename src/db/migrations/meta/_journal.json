@@ -50,6 +50,13 @@
       "when": 1789578853227,
       "tag": "0006_search_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789589021938,
+      "tag": "0007_cuisine_categories_seed",
+      "breakpoints": true
     }
   ]
 }

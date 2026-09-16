@@ -69,8 +69,10 @@ No business logic. The goal is a repository where the next phase can be written 
       supports `check()`, so the invariant sits next to the column it constrains
 - [x] Hand-written SQL migration for the one thing Drizzle cannot express:
       `GIN (immutable_unaccent(...) gin_trgm_ops)` on `restaurants.trade_name` and `products.name`
-- [ ] ~~Seed for `cuisine_categories`~~ — dropped on purpose: the database gets filled by exercising
-      each endpoint as it is built, so the data is always something a real request produced
+- [x] Seed for `cuisine_categories` — **reinstated in Phase 3** (migration `0007`). Every other
+      table is filled by exercising its endpoint, but no endpoint creates a cuisine category and
+      there is no admin role (D6), so it is platform data. Fixed UUIDv7 ids, `ON CONFLICT (slug)
+      DO NOTHING`, so the migration is repeatable and every environment names the same rows
 
 **Done when:** migrations apply against an empty database, and a hand-run accent-insensitive search in psql returns what it should. ✅
 
@@ -143,9 +145,17 @@ No business logic. The goal is a repository where the next phase can be written 
 
 ## Phase 3 — Restaurant (owner)
 
-- [ ] `POST /restaurants` — creates a `DRAFT` restaurant, the `OWNER` membership and the `restaurant_order_counters` row in one transaction
-- [ ] `PATCH /restaurants/:id`, including `delivery_fee_cents` and `min_order_cents`
-- [ ] `opening_hours` bulk CRUD, rejecting overlapping shifts on the same weekday
+- [x] `POST /restaurants` — creates a `DRAFT` restaurant, the `OWNER` membership and the `restaurant_order_counters` row in one transaction
+- [x] `GET /restaurants/:restaurantId` — not in the original list; the dashboard cannot render the
+      edit form without reading a `DRAFT` restaurant, and Phase 5's public `GET /restaurants/:slug`
+      only serves `ACTIVE` ones. Any active member reads it; only `OWNER` writes
+- [x] `PATCH /restaurants/:id`, including `delivery_fee_cents` and `min_order_cents`
+- [x] `opening_hours` bulk CRUD, rejecting overlapping shifts on the same weekday — a single
+      `PUT .../opening-hours` replaces the whole grid in one transaction, which is how the editor
+      screen behaves and removes any per-shift id juggling on the client. Overlap is checked over
+      the **whole week** in minutes, not per weekday: a shift crossing midnight occupies the next
+      day, so Friday 18:00–02:00 conflicts with Saturday 01:00–05:00. `validateOpeningHours` is
+      pure and is the function Phase 6's `isOpenAt` builds on
 - [ ] `restaurant_cuisines`
 - [ ] `POST /uploads/presign` → client uploads to S3 → `PATCH` stores `logo_key` / `banner_key`
 - [ ] `PATCH /restaurants/:id/status` enforcing the activation checklist (D6), listing what is missing on rejection

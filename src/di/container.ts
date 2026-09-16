@@ -2,6 +2,8 @@ import { type DependencyContainer, Lifecycle, container as rootContainer } from 
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
 import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
+import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
+import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
@@ -11,12 +13,19 @@ import { SignUpCustomerUseCase } from '@/application/useCases/auth/SignUpCustome
 import { SignUpRestaurantUserUseCase } from '@/application/useCases/auth/SignUpRestaurantUserUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
+import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
+import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
+import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
+import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
+import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
 import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
+import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
+import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
 import { TOKENS } from './tokens.js'
 
@@ -80,6 +89,18 @@ export function buildContainer(env: Env): DependencyContainer {
     { lifecycle: Lifecycle.Singleton }
   )
 
+  container.register<IRestaurantsRepository>(
+    TOKENS.RestaurantsRepository,
+    { useClass: DrizzleRestaurantsRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IOpeningHoursRepository>(
+    TOKENS.OpeningHoursRepository,
+    { useClass: DrizzleOpeningHoursRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
   container.register(
     TOKENS.SignUpCustomerUseCase,
     { useClass: SignUpCustomerUseCase },
@@ -121,6 +142,36 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ListMyRestaurantsUseCase,
     { useClass: ListMyRestaurantsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateRestaurantUseCase,
+    { useClass: CreateRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetRestaurantUseCase,
+    { useClass: GetRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateRestaurantUseCase,
+    { useClass: UpdateRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListOpeningHoursUseCase,
+    { useClass: ListOpeningHoursUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ReplaceOpeningHoursUseCase,
+    { useClass: ReplaceOpeningHoursUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

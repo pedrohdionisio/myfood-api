@@ -1,0 +1,490 @@
+// =====================================================================
+// MyFood — Database schema (MVP)
+// Postgres + PostGIS | IDs: UUIDv7 (gerado na aplicação)
+// Dinheiro em centavos (integer) | Datas em timestamptz
+// =====================================================================
+
+Project myfood {
+  database_type: 'PostgreSQL'
+  Note: 'MVP sem complementos (option groups). Pagamentos online pendentes da escolha do gateway.'
+}
+
+// ---------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------
+
+Enum member_role {
+  OWNER
+  DRIVER
+}
+
+Enum restaurant_status {
+  DRAFT      [note: 'Onboarding em andamento']
+  ACTIVE
+  SUSPENDED
+}
+
+Enum order_status {
+  PENDING_PAYMENT   [note: 'Aguardando pagamento online']
+  PENDING           [note: 'Aguardando restaurante aceitar']
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED   [note: 'Cliente ausente, endereço errado etc.']
+  REJECTED          [note: 'Recusado pelo restaurante']
+  CANCELED
+}
+
+Enum payment_method {
+  ONLINE
+  CASH
+  CARD_ON_DELIVERY
+}
+
+Enum payment_status {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+Enum actor_type {
+  CUSTOMER
+  RESTAURANT_USER
+  SYSTEM
+}
+
+Enum device_platform {
+  IOS
+  ANDROID
+}
+
+// ---------------------------------------------------------------------
+// Clientes
+// ---------------------------------------------------------------------
+
+Table customers {
+  id uuid [pk]
+  cognito_sub varchar(64) [not null, unique, note: 'User Pool de clientes']
+  name varchar(120) [not null]
+  email varchar(254) [not null, unique]
+  phone varchar(20)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table customer_addresses {
+  id uuid [pk]
+  customer_id uuid [not null, ref: > customers.id]
+  label varchar(40) [note: 'Casa, Trabalho...']
+  zip_code char(8) [not null]
+  street varchar(160) [not null]
+  number varchar(20) [not null]
+  complement varchar(80)
+  neighborhood varchar(80) [not null]
+  city varchar(80) [not null]
+  state char(2) [not null]
+  reference varchar(160)
+  location "geography(Point,4326)" [not null]
+  is_default boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    customer_id
+  }
+
+  Note: 'Unique parcial: (customer_id) WHERE is_default = true'
+}
+
+Table push_tokens {
+  id uuid [pk]
+  customer_id uuid [not null, ref: > customers.id]
+  token varchar(255) [not null, unique, note: 'Expo push token']
+  platform device_platform [not null]
+  created_at timestamptz [not null, default: `now()`]
+  last_seen_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    customer_id
+  }
+}
+
+// ---------------------------------------------------------------------
+// Usuários de restaurante e vínculos
+// ---------------------------------------------------------------------
+
+Table restaurant_users {
+  id uuid [pk]
+  cognito_sub varchar(64) [not null, unique, note: 'User Pool de restaurantes']
+  name varchar(120) [not null]
+  email varchar(254) [not null, unique]
+  phone varchar(20)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table restaurant_members {
+  id uuid [pk]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  user_id uuid [not null, ref: > restaurant_users.id]
+  role member_role [not null]
+  active boolean [not null, default: true, note: 'Desativação vale imediatamente (checado a cada request)']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, user_id) [unique]
+    user_id
+  }
+}
+
+// ---------------------------------------------------------------------
+// Restaurantes
+// ---------------------------------------------------------------------
+
+Table restaurants {
+  id uuid [pk]
+  slug varchar(80) [not null, unique]
+  legal_name varchar(160) [not null, note: 'Razão social']
+  trade_name varchar(120) [not null, note: 'Nome fantasia']
+  cnpj char(14) [not null, unique]
+  phone varchar(20)
+  email varchar(254)
+  description text
+  logo_key varchar(255) [note: 'Chave no S3']
+  banner_key varchar(255) [note: 'Chave no S3']
+
+  zip_code char(8) [not null]
+  street varchar(160) [not null]
+  number varchar(20) [not null]
+  complement varchar(80)
+  neighborhood varchar(80) [not null]
+  city varchar(80) [not null]
+  state char(2) [not null]
+  location "geography(Point,4326)" [not null]
+
+  delivery_radius_m integer [not null]
+  min_order_cents integer [not null, default: 0]
+  avg_prep_time_min smallint [not null, default: 30]
+
+  status restaurant_status [not null, default: 'DRAFT']
+  is_accepting_orders boolean [not null, default: false, note: 'Pausar loja manualmente']
+
+  rating_avg "numeric(3,2)" [not null, default: 0, note: 'Denormalizado a partir de reviews']
+  rating_count integer [not null, default: 0]
+
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    status
+  }
+
+  Note: '''
+  Índices criados via migration (não expressáveis em DBML):
+  - GIST (location) para ST_DWithin
+  - GIN (trade_name gin_trgm_ops) para busca com pg_trgm + unaccent
+  '''
+}
+
+Table cuisine_categories {
+  id uuid [pk]
+  name varchar(60) [not null]
+  slug varchar(60) [not null, unique]
+  icon_key varchar(255)
+  position smallint [not null, default: 0]
+}
+
+Table restaurant_cuisines {
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  cuisine_category_id uuid [not null, ref: > cuisine_categories.id]
+
+  indexes {
+    (restaurant_id, cuisine_category_id) [pk]
+    cuisine_category_id
+  }
+}
+
+Table opening_hours {
+  id uuid [pk]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  day_of_week smallint [not null, note: '0 = domingo ... 6 = sábado']
+  opens_at time [not null]
+  closes_at time [not null, note: 'Se closes_at < opens_at, o turno vira a meia-noite']
+
+  indexes {
+    (restaurant_id, day_of_week)
+  }
+
+  Note: 'Permite múltiplos turnos por dia (almoço e jantar)'
+}
+
+Table delivery_fee_ranges {
+  id uuid [pk]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  max_distance_m integer [not null]
+  fee_cents integer [not null]
+
+  indexes {
+    (restaurant_id, max_distance_m) [unique]
+  }
+
+  Note: 'Faixa aplicada = menor max_distance_m >= distância do pedido'
+}
+
+// ---------------------------------------------------------------------
+// Cardápio
+// ---------------------------------------------------------------------
+
+Table menu_categories {
+  id uuid [pk]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  name varchar(80) [not null]
+  position smallint [not null, default: 0]
+  archived_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, position)
+  }
+}
+
+Table products {
+  id uuid [pk]
+  restaurant_id uuid [not null, ref: > restaurants.id, note: 'Denormalizado para consultas e autorização']
+  menu_category_id uuid [not null, ref: > menu_categories.id]
+  name varchar(120) [not null]
+  description text
+  price_cents integer [not null]
+  image_key varchar(255)
+  position smallint [not null, default: 0]
+  is_available boolean [not null, default: true, note: 'Esgotado temporariamente']
+  archived_at timestamptz [note: 'Nunca deletar produto já vendido']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, menu_category_id, position)
+  }
+
+  Note: 'Migration: GIN (name gin_trgm_ops) para busca'
+}
+
+// ---------------------------------------------------------------------
+// Pedidos
+// ---------------------------------------------------------------------
+
+Table orders {
+  id uuid [pk]
+  display_number integer [not null, note: 'Número sequencial por restaurante (#1042)']
+  customer_id uuid [not null, ref: > customers.id]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  driver_member_id uuid [ref: > restaurant_members.id, note: 'Preenchido ao sair para entrega']
+
+  status order_status [not null]
+  payment_method payment_method [not null]
+  payment_status payment_status [not null, default: 'PENDING']
+  change_for_cents integer [note: 'Troco para (apenas CASH)']
+
+  subtotal_cents integer [not null]
+  delivery_fee_cents integer [not null]
+  discount_cents integer [not null, default: 0]
+  total_cents integer [not null]
+
+  delivery_code char(4) [not null, note: 'NUNCA exposto em rotas de restaurante/entregador']
+  distance_m integer [not null]
+  notes varchar(280)
+
+  // Snapshot do endereço de entrega
+  delivery_zip_code char(8) [not null]
+  delivery_street varchar(160) [not null]
+  delivery_number varchar(20) [not null]
+  delivery_complement varchar(80)
+  delivery_neighborhood varchar(80) [not null]
+  delivery_city varchar(80) [not null]
+  delivery_state char(2) [not null]
+  delivery_reference varchar(160)
+  delivery_location "geography(Point,4326)" [not null]
+
+  cancellation_reason varchar(280)
+
+  created_at timestamptz [not null, default: `now()`]
+  confirmed_at timestamptz
+  ready_at timestamptz
+  dispatched_at timestamptz
+  delivered_at timestamptz
+  finished_at timestamptz [note: 'Quando entrou em status terminal não-entregue']
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, display_number) [unique]
+    (restaurant_id, status)
+    (restaurant_id, created_at)
+    (customer_id, created_at)
+    (driver_member_id, status)
+  }
+}
+
+Table restaurant_order_counters {
+  restaurant_id uuid [pk, ref: - restaurants.id]
+  next_number integer [not null, default: 1]
+
+  Note: '''
+  Origem de orders.display_number. A linha é criada junto com o restaurante.
+  No checkout: UPDATE ... SET next_number = next_number + 1 RETURNING next_number - 1.
+  Trava só esta linha, nunca a de restaurants (lida por toda listagem e busca).
+  Buracos na sequência são aceitáveis: é rótulo de exibição, não sequência auditada.
+  '''
+}
+
+Table idempotency_keys {
+  key varchar(64) [pk, note: 'UUID gerado pelo cliente por tentativa de checkout']
+  customer_id uuid [not null, ref: > customers.id]
+  order_id uuid [ref: > orders.id, note: 'Pedido criado sob esta chave']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    created_at [note: 'Para limpeza de chaves antigas']
+  }
+
+  Note: 'Gravada na mesma transação do pedido. Replay da mesma chave devolve o pedido original.'
+}
+
+Table order_items {
+  id uuid [pk]
+  order_id uuid [not null, ref: > orders.id]
+  product_id uuid [not null, ref: > products.id]
+  product_name varchar(120) [not null, note: 'Snapshot']
+  unit_price_cents integer [not null, note: 'Preço unitário FINAL da linha (produto + futuros complementos)']
+  quantity smallint [not null]
+  total_cents integer [not null, note: 'unit_price_cents * quantity']
+  notes varchar(280)
+
+  indexes {
+    order_id
+    product_id
+  }
+}
+
+Table order_status_history {
+  id uuid [pk]
+  order_id uuid [not null, ref: > orders.id]
+  from_status order_status [note: 'Nulo na criação']
+  to_status order_status [not null]
+  actor_type actor_type [not null]
+  actor_id uuid [note: 'customers.id ou restaurant_users.id; nulo para SYSTEM']
+  reason varchar(280)
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (order_id, created_at)
+  }
+}
+
+Table delivery_confirmation_attempts {
+  id uuid [pk]
+  order_id uuid [not null, ref: > orders.id]
+  member_id uuid [not null, ref: > restaurant_members.id]
+  success boolean [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (order_id, created_at)
+  }
+
+  Note: 'Limite de tentativas: COUNT de falhas na janela recente antes de validar'
+}
+
+// ---------------------------------------------------------------------
+// Avaliações
+// ---------------------------------------------------------------------
+
+Table reviews {
+  id uuid [pk]
+  order_id uuid [not null, unique, ref: - orders.id]
+  customer_id uuid [not null, ref: > customers.id]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  rating smallint [not null, note: 'CHECK 1..5']
+  comment varchar(1000)
+  reply varchar(1000)
+  replied_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, created_at)
+  }
+}
+
+// ---------------------------------------------------------------------
+// Analytics (agregados via SQS)
+// ---------------------------------------------------------------------
+
+Table restaurant_daily_stats {
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  date date [not null, note: 'Dia no fuso America/Sao_Paulo']
+  orders_count integer [not null, default: 0]
+  delivered_count integer [not null, default: 0]
+  canceled_count integer [not null, default: 0]
+  gross_revenue_cents bigint [not null, default: 0]
+  delivery_fee_revenue_cents bigint [not null, default: 0]
+  total_prep_seconds bigint [not null, default: 0, note: 'Soma; média calculada na leitura']
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (restaurant_id, date) [pk]
+  }
+}
+
+Table product_daily_sales {
+  product_id uuid [not null, ref: > products.id]
+  date date [not null]
+  restaurant_id uuid [not null, ref: > restaurants.id]
+  quantity integer [not null, default: 0]
+  revenue_cents bigint [not null, default: 0]
+
+  indexes {
+    (product_id, date) [pk]
+    (restaurant_id, date)
+  }
+}
+
+Table processed_messages {
+  message_id varchar(128) [pk, note: 'Idempotência dos consumers SQS']
+  consumer varchar(60) [not null]
+  processed_at timestamptz [not null, default: `now()`]
+}
+
+// ---------------------------------------------------------------------
+// EVOLUÇÃO PLANEJADA — complementos (fora do MVP)
+// ---------------------------------------------------------------------
+// Table option_groups {
+//   id uuid [pk]
+//   product_id uuid [not null, ref: > products.id]
+//   name varchar(80) [not null]
+//   min_select smallint [not null, default: 0]
+//   max_select smallint [not null, default: 1]
+//   position smallint [not null, default: 0]
+// }
+//
+// Table options {
+//   id uuid [pk]
+//   option_group_id uuid [not null, ref: > option_groups.id]
+//   name varchar(80) [not null]
+//   price_cents integer [not null, default: 0]
+//   is_available boolean [not null, default: true]
+//   position smallint [not null, default: 0]
+// }
+//
+// Table order_item_options {
+//   id uuid [pk]
+//   order_item_id uuid [not null, ref: > order_items.id]
+//   option_id uuid [not null, ref: > options.id]
+//   group_name varchar(80) [not null]
+//   option_name varchar(80) [not null]
+//   price_cents integer [not null]
+// }

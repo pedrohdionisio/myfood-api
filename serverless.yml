@@ -1,0 +1,115 @@
+service: myfood-api
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    CustomerUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: myfood-customers-${sls:stage}
+        UsernameAttributes: [email]
+        AutoVerifiedAttributes: [email]
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireUppercase: true
+            RequireNumbers: true
+            RequireSymbols: false
+        Schema:
+          - Name: name
+            AttributeDataType: String
+            Mutable: true
+            Required: true
+
+    CustomerUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: myfood-app-${sls:stage}
+        UserPoolId: !Ref CustomerUserPool
+        GenerateSecret: false
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+
+    RestaurantUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: myfood-restaurants-${sls:stage}
+        UsernameAttributes: [email]
+        AutoVerifiedAttributes: [email]
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: false
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireUppercase: true
+            RequireNumbers: true
+            RequireSymbols: false
+        Schema:
+          - Name: name
+            AttributeDataType: String
+            Mutable: true
+            Required: true
+
+    RestaurantUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: myfood-dashboard-${sls:stage}
+        UserPoolId: !Ref RestaurantUserPool
+        GenerateSecret: false
+        ExplicitAuthFlows:
+          - ALLOW_USER_SRP_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+
+    MediaBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: myfood-media-${sls:stage}-${aws:accountId}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        CorsConfiguration:
+          CorsRules:
+            - AllowedMethods: [PUT, GET]
+              AllowedOrigins: ['*']
+              AllowedHeaders: ['*']
+              MaxAge: 3000
+
+    OrderEventsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: myfood-order-events-dlq-${sls:stage}
+        MessageRetentionPeriod: 1209600
+
+    OrderEventsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: myfood-order-events-${sls:stage}
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OrderEventsDLQ.Arn
+          maxReceiveCount: 5
+
+  Outputs:
+    CustomerUserPoolId:
+      Value: !Ref CustomerUserPool
+    CustomerUserPoolClientId:
+      Value: !Ref CustomerUserPoolClient
+    RestaurantUserPoolId:
+      Value: !Ref RestaurantUserPool
+    RestaurantUserPoolClientId:
+      Value: !Ref RestaurantUserPoolClient
+    MediaBucketName:
+      Value: !Ref MediaBucket
+    OrderEventsQueueUrl:
+      Value: !Ref OrderEventsQueue

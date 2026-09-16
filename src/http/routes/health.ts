@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm'
 import type { DependencyContainer } from 'tsyringe'
-import type { DatabaseConnection } from '@/db/client.js'
+import type { IDatabaseConnection } from '@/db/client.js'
 import { TOKENS } from '@/di/tokens.js'
 import { healthResponseSchema, readyResponseSchema } from '@/schemas/health.js'
 import type { App } from '../app.js'
 
 export function registerHealthRoutes(app: App, container: DependencyContainer): void {
-  const database = container.resolve<DatabaseConnection>(TOKENS.Database)
+  const database = container.resolve<IDatabaseConnection>(TOKENS.Database)
 
   app.get(
     '/health',

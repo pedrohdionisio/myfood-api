@@ -10,7 +10,18 @@ const envSchema = z.object({
   HOST: z.string().min(1).default('0.0.0.0'),
   PORT: z.coerce.number().int().positive().max(65535).default(3333),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ })
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+
+  AWS_REGION: z.string().min(1),
+  COGNITO_CUSTOMER_POOL_ID: z.string().min(1),
+  COGNITO_CUSTOMER_CLIENT_ID: z.string().min(1),
+  COGNITO_RESTAURANT_POOL_ID: z.string().min(1),
+  COGNITO_RESTAURANT_CLIENT_ID: z.string().min(1),
+
+  // Opcionais: sem elas o SDK resolve pela cadeia padrão (~/.aws/credentials, IAM role).
+  // No container não há ~/.aws, então lá elas precisam vir do .env.
+  AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)

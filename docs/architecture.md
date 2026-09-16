@@ -25,15 +25,30 @@ MyFood uses three separate repositories (no monorepo). The contract between them
   - `server.ts` listens locally; a Lambda entry point can be added later with `@fastify/aws-lambda`.
   - The database uses `postgres.js` through `DATABASE_URL`, so the same code works against local Postgres or a hosted serverless Postgres (e.g. Neon pooled connection) if the API is deployed later.
 
-### 3.1 Ports and adapters
+### 3.1 Layers
+
+Clean architecture with dependency inversion. Dependencies point inwards: `http` → `application` → `domain`; `infra` implements `application` interfaces; `di/container.ts` is the only place that knows both sides.
+
+| Layer | Holds | May import |
+|---|---|---|
+| `domain` | pure rules, enums, errors | nothing |
+| `application/interfaces` | ports (`I*.ts`) | `domain` |
+| `application/useCases` | one class per operation | `domain`, ports |
+| `infra` | Drizzle repositories, AWS gateways | everything |
+| `http` | Fastify routes, plugins, error handler | use cases, `schemas` |
+| `di` | tokens and the composition root | everything |
+
+Injection is constructor-based through tsyringe. **Every constructor parameter carries an explicit `@inject(TOKENS.X)`**: esbuild does not emit `design:paramtypes`, so resolution by type fails at runtime rather than at compile time.
+
+### 3.2 Ports and adapters
 
 Every external service sits behind a port. The real adapter runs in development and production; a fake adapter runs in tests.
 
 | Port | Real adapter | Test adapter |
 |---|---|---|
-| `TokenVerifier` | Cognito (`aws-jwt-verify`) | In-memory signer |
-| `EventPublisher` | SQS | In-memory buffer |
-| `FileStorage` | S3 presigned URLs | In-memory key map |
+| `ITokenVerifier` | Cognito (`aws-jwt-verify`), one instance per pool | In-memory signer |
+| `IEventPublisher` | SQS | In-memory buffer |
+| `IStorageGateway` | S3 presigned URLs | In-memory key map |
 
 Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. The SQS worker gets one separate test that runs against a real queue, outside the default `vitest run`.
 
@@ -46,7 +61,10 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 - **Roles live in the database** (`restaurant_members.role`: `OWNER` | `DRIVER`), not in Cognito groups. Token claims last until the token expires, so a deactivated driver would keep access; a database check takes effect immediately.
 - **Driver accounts** are created by the owner from the dashboard. The API calls Cognito `AdminCreateUser` and creates the `restaurant_users` + `restaurant_members` rows in the same operation.
 - **Driver permissions:** drivers only see orders out for delivery assigned to them. No menu or analytics. The only financial fields they see are `total_cents` and `change_for_cents`, and only when `payment_method = 'CASH'`, because they have to collect the money and make change.
-- **Sign-up** happens in Cognito (Hosted UI or SDK) on the frontend. The local row is created on first authenticated call, via `POST /customers/me` or `POST /restaurant-users/me`, rather than a `PostConfirmation` Lambda trigger — one less deployed function, and the API stays the only writer of its own tables.
+- **Restaurant-scoped routes carry the id in the path** (`/restaurants/:restaurantId/...`). A restaurant user can be a member of several restaurants, so the scope cannot come from the user record the way it does in `waitr-api`; `requireMembership` reads the path param, loads the membership and checks `active` and role.
+- **The client never talks to Cognito. The API does (D5).** Sign-up, sign-in and refresh are API routes (`POST /auth/customers/sign-up`, `.../sign-in`, `.../refresh`); the frontends only ever hold tokens the API handed them. Cognito is an implementation detail behind `IAuthGateway`, which is what makes replacing it later a change in one adapter.
+- **Sign-up is a saga.** The account is created in Cognito first, then the local row. If the local write fails, the Cognito account is deleted before the error propagates — otherwise it would be orphaned: able to authenticate, with no row to say who it is, which the auth plugin rejects on every request anyway.
+- **The ID token is verified, not the access token.** It is the one that carries email and name, which the API reads without trusting a request body.
 
 ## 5. Restaurants
 
@@ -219,7 +237,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D2 | Checkout is idempotent through an `Idempotency-Key` header and the `idempotency_keys` table (§7.4). |
 | D3 | Dashboard real-time uses SSE, not WebSocket (§11). |
 | D4 | ~~Google Geocoding API behind a `Geocoder` port~~ — superseded by D13. ViaCEP still autocompletes the address text (§9). |
-| D5 | Sign-up happens in Cognito; the local row is created on first authenticated call (§4). |
+| D5 | The client never calls Cognito. Sign-up, sign-in and refresh are API routes, and sign-up is a saga that deletes the Cognito account if the local write fails (§4). |
 | D6 | `DRAFT` → `ACTIVE` is self-service behind a completeness checklist; no platform admin role (§5). |
 | D7 | Multiple `OWNER` memberships per restaurant are allowed (§5). |
 | D8 | `display_number` comes from `restaurant_order_counters` (§7.5). |

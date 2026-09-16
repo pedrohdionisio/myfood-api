@@ -18,8 +18,12 @@ import type { DependencyContainer } from 'tsyringe'
 import type { Env } from '@/config/env.js'
 import { uuidv7 } from '@/shared/uuid.js'
 import { registerErrorHandler } from './error-handler.js'
+import { registerAuth } from './plugins/auth.js'
+import { registerMembership } from './plugins/membership.js'
 import { registerSwagger } from './plugins/swagger.js'
+import { registerCustomerAuthRoutes, registerRestaurantAuthRoutes } from './routes/auth.js'
 import { registerHealthRoutes } from './routes/health.js'
+import { registerMemberRoutes } from './routes/members.js'
 
 export type App = FastifyInstance<
   RawServerDefault,
@@ -77,7 +81,13 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   await registerSwagger(app)
   registerErrorHandler(app)
 
+  registerAuth(app, container)
+  registerMembership(app, container)
+
   registerHealthRoutes(app, container)
+  registerCustomerAuthRoutes(app, container)
+  registerRestaurantAuthRoutes(app, container)
+  registerMemberRoutes(app, container)
 
   return app
 }

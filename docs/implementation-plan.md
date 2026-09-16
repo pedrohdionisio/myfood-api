@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 2 — Authentication. Blocked on the AWS deploy (see Phase 0). Phase 1 is done.
+**Current phase:** Phase 3 — Restaurant (owner). Phases 0–2 are done.
 
 ---
 
@@ -106,14 +106,38 @@ No business logic. The goal is a repository where the next phase can be written 
 
 ## Phase 2 — Authentication and authorization
 
-- [ ] `TokenVerifier` port with the Cognito adapter (`aws-jwt-verify`)
-- [ ] `requireCustomer` — resolves `customers` by `cognito_sub`
-- [ ] `requireRestaurantUser` — resolves `restaurant_users` by `cognito_sub`
-- [ ] `requireMembership(role)` — **reads `restaurant_members.active` from the database on every request** (non-negotiable rule 5), never from token claims
-- [ ] `POST /customers/me` and `POST /restaurant-users/me` creating the local row on first login (D5)
-- [ ] `POST /restaurants/:id/members` — Cognito `AdminCreateUser` + `restaurant_users` + `restaurant_members` in one operation
+- [x] Clean-architecture restructure: `domain`, `application`, `infra`, `di`, `http`, `schemas`
+- [x] `ITokenVerifier` port with the Cognito adapter (`aws-jwt-verify`), one instance per pool
+- [x] `IAuthGateway` port with the Cognito adapter (sign-up, sign-in, refresh, delete)
+- [x] `authenticateCustomer` / `authenticateRestaurantUser` — resolve the local row by `cognito_sub`
+- [x] `requireMembership(...roles)` — **reads `restaurant_members.active` from the database on every request** (non-negotiable rule 5), never from token claims
+- [x] `POST /auth/customers/sign-up | sign-in | refresh` and `GET /customers/me`, with the sign-up saga
+- [x] The same three auth routes for restaurant users (owner self-signup)
+- [x] `GET /restaurant-users/me/restaurants` — the restaurants the caller has an active membership in
+- [x] `POST /restaurants/:restaurantId/members` — owner adds a member; creates the Cognito account
+      and both rows only when the person is new
 
-**Done when:** a real Cognito token reaches a protected route, and the four rejection paths — no token, wrong pool, `active = false`, wrong role — each return the intended status when exercised by hand.
+**Done when:** a real Cognito token reaches a protected route, and the four rejection paths — no token, wrong pool, `active = false`, wrong role — each return the intended status when exercised by hand. ✅
+
+### Notes from Phase 2
+
+- **The client never calls Cognito (D5, revised).** Sign-up, sign-in and refresh are API routes and
+  sign-up is a saga: the Cognito account is deleted if the local write fails. An earlier design had
+  the frontend talking to Cognito and the API creating the row on first call, which needed two
+  levels of authentication; that is gone.
+- **`ALLOW_ADMIN_USER_PASSWORD_AUTH`** replaced `ALLOW_USER_SRP_AUTH` on both pool clients, because
+  the API performs the login itself. Required a `serverless deploy`.
+- **Drizzle wraps driver errors**, so a unique violation carries `code`/`constraint_name` in
+  `cause`, not at the top level — `violatesUniqueConstraint` walks the chain.
+- **Adding a member is not always creating an account.** A driver can work for two restaurants, so
+  the use case links an existing `restaurant_users` row when the e-mail is already known and only
+  touches Cognito for genuinely new people.
+- **Verified by hand, end to end:** owner and customer sign-up creating rows in both Cognito and
+  Postgres; sign-in; refresh; wrong password; duplicate e-mail in Cognito and in the database (with
+  the saga deleting the orphan); a driver created by the owner then signing in; a driver refused
+  `POST /members` (OWNER only); an owner refused on a restaurant they have no membership in; a
+  customer token refused on a restaurant route; and `active = false` taking effect on the next
+  request with the same token.
 
 ---
 

@@ -21,6 +21,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # Traz as variáveis da AWS sem duplicá-las aqui. O bloco environment vence o env_file,
+    # então DATABASE_URL continua apontando para o container do Postgres e não para localhost.
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: development
       HOST: 0.0.0.0

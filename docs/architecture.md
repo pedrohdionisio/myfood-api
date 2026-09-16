@@ -7,7 +7,7 @@ This document records the architectural decisions for the MyFood API and the rea
 - **Dashboard (web):** used by restaurant owners and drivers.
   - Owners go through onboarding to register their business, then manage the menu, store info, opening hours, delivery settings, orders and analytics.
   - Drivers get a restricted, mobile-friendly view to confirm deliveries.
-- **App (mobile):** used by customers. Nearby restaurants filtered by cuisine category, search, ordering, order status tracking and reviews. Payment online or on delivery.
+- **App (mobile):** used by customers. Restaurants in their city filtered by cuisine category, search, ordering, order status tracking and reviews. Payment online or on delivery.
 - **API:** this repository.
 
 ## 2. Repositories and contracts
@@ -16,7 +16,7 @@ MyFood uses three separate repositories (no monorepo). The contract between them
 
 ## 3. Infrastructure
 
-- **Local-first:** the API and Postgres (with PostGIS) run in Docker. There is no deployed environment yet.
+- **Local-first:** the API and Postgres run in Docker. There is no deployed environment yet.
 - **AWS, pay-per-use only:** Cognito, S3, SQS and SES, provisioned with Serverless Framework.
 - **Real AWS in development.** These services are pay-per-use and effectively free at this volume, so local development runs against real resources instead of emulators (LocalStack, ElasticMQ, cognito-local). Emulators would only prove the code works against the emulator.
 - **Resources are per stage.** Every resource name carries `${sls:stage}`, so two developers never share a queue or a user pool.
@@ -34,7 +34,6 @@ Every external service sits behind a port. The real adapter runs in development 
 | `TokenVerifier` | Cognito (`aws-jwt-verify`) | In-memory signer |
 | `EventPublisher` | SQS | In-memory buffer |
 | `FileStorage` | S3 presigned URLs | In-memory key map |
-| `Geocoder` | Google Geocoding API | Fixed coordinate table |
 
 Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. The SQS worker gets one separate test that runs against a real queue, outside the default `vitest run`.
 
@@ -52,11 +51,11 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 ## 5. Restaurants
 
 - **Onboarding status:** `DRAFT` → `ACTIVE` → `SUSPENDED`. Only `ACTIVE` restaurants appear in the app.
-- **Activation is self-service, behind a checklist.** There is no platform admin role. The owner calls `PATCH /restaurants/:id/status`, and the API accepts `ACTIVE` only when the address, at least one opening-hours shift, at least one delivery fee range and at least one available product exist. The rejection response lists what is missing, which is exactly what the dashboard onboarding screen renders.
+- **Activation is self-service, behind a checklist.** There is no platform admin role. The owner calls `PATCH /restaurants/:id/status`, and the API accepts `ACTIVE` only when the address, at least one opening-hours shift and at least one available product exist. The rejection response lists what is missing, which is exactly what the dashboard onboarding screen renders.
 - **Multiple owners are allowed** (business partners). Nothing restricts a restaurant to a single `OWNER` membership.
 - **`is_accepting_orders`** is a manual "pause store" switch, separate from opening hours.
 - **Opening hours** allow multiple shifts per day. If `closes_at < opens_at`, the shift crosses midnight.
-- **Delivery:** `delivery_radius_m` sets the maximum distance. `delivery_fee_ranges` define fees by distance; the applied range is the smallest `max_distance_m` greater than or equal to the order distance.
+- **Delivery (D13):** a restaurant serves the city it is registered in, for a single `delivery_fee_cents`. There is no radius and no distance-based fee, because the schema carries no coordinates — see §9.
 - **Ratings** (`rating_avg`, `rating_count`) are denormalized from `reviews`, recomputed in the same transaction that writes the review. It is a single cheap aggregate over one restaurant, and going through SQS would leave a visible window where a customer sees their own review not counted.
 
 ## 6. Menu
@@ -115,7 +114,7 @@ The cart exists only in the app. On checkout the API recalculates everything fro
 
 - product existence and availability
 - restaurant status, `is_accepting_orders` and opening hours
-- distance, delivery radius and fee range
+- that the address city matches the restaurant city
 - minimum order value
 - subtotal and total
 
@@ -167,11 +166,17 @@ Gaps are acceptable — a rolled-back transaction burns a number. These are disp
 
 **Failed deliveries** (customer absent, wrong address) go to `DELIVERY_FAILED`, which does not require the code. This keeps orders from getting stuck in `OUT_FOR_DELIVERY`.
 
-## 9. Geolocation and search
+## 9. Discovery and search
 
-- **Nearby restaurants:** PostGIS `ST_DWithin` on `restaurants.location` with a GIST index, filtered by each restaurant's delivery radius.
-- **Address lookup:** ViaCEP autocompletes street, neighborhood, city and state from a postal code, but it does not return coordinates. Coordinates come from the **Google Geocoding API**, behind the `Geocoder` port. Every address the API stores — customer addresses and restaurant addresses — is geocoded server-side, never taken from the client, because distance drives the delivery fee and the radius check.
-- **Search:** `pg_trgm` + `unaccent` with GIN indexes on restaurant and product names, so "acai" matches "Açaí". No separate search engine for the MVP.
+**There is no geolocation in the MVP (D13).** No coordinates are stored, PostGIS is not used, and discovery is textual:
+
+- **Finding restaurants:** filter by `restaurants.city` and `status = 'ACTIVE'`, with a `(city, status)` index. The city comes from the customer's selected address.
+- **Address lookup:** ViaCEP autocompletes street, neighborhood, city and state from a postal code. No geocoder is involved.
+- **Search:** `pg_trgm` + `unaccent` with GIN indexes on restaurant and product names, so "acai" matches "Açaí". This is not geo and is unaffected.
+
+**Why it was dropped.** drizzle-kit cannot emit a `geography` column: it quotes unknown types, producing `"geography(Point,4326)"`, which Postgres reads as a type name and rejects. Every way around it cost something — a post-processing script over generated migrations, hand-editing each migration, or switching to `geometry` and casting in every spatial query. None was worth paying before the rest of the domain existed.
+
+**What returning to geo costs.** Adding `location` to `restaurants`, `customer_addresses` and `orders`; bringing back `delivery_radius_m`, `delivery_fee_ranges` and `orders.distance_m`; a geocoder behind a port; and rewriting discovery and the fee calculation in checkout. The addresses already stored keep every field a geocoder needs, so existing rows can be backfilled rather than re-collected.
 
 ## 10. Analytics
 
@@ -213,7 +218,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D1 | No `payments` / `webhook_events` in the MVP. `payment_status` becomes `PAID` on delivery. |
 | D2 | Checkout is idempotent through an `Idempotency-Key` header and the `idempotency_keys` table (§7.4). |
 | D3 | Dashboard real-time uses SSE, not WebSocket (§11). |
-| D4 | Google Geocoding API behind the `Geocoder` port; ViaCEP only autocompletes the address text (§9). |
+| D4 | ~~Google Geocoding API behind a `Geocoder` port~~ — superseded by D13. ViaCEP still autocompletes the address text (§9). |
 | D5 | Sign-up happens in Cognito; the local row is created on first authenticated call (§4). |
 | D6 | `DRAFT` → `ACTIVE` is self-service behind a completeness checklist; no platform admin role (§5). |
 | D7 | Multiple `OWNER` memberships per restaurant are allowed (§5). |
@@ -222,9 +227,11 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D10 | `rating_avg` is recomputed in the review transaction, not through SQS (§5). |
 | D11 | Customers cancel only from `PENDING` (§7.1). |
 | D12 | Drivers do not self-assign `READY` orders (§7.1). |
+| D13 | No geolocation in the MVP. Delivery is city-based with a flat fee per restaurant (§9). |
 
 ## 14. Open questions
 
 - Payment gateway choice and split model
 - Future deployment model for the API and database (e.g. Lambda + Neon)
 - Review window: how long after delivery a customer may still review an order
+- When to reintroduce geolocation, and whether to do it with `geography` plus a generation workaround or with `geometry` and casts (§9)

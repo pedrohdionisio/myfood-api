@@ -8,6 +8,48 @@
       "when": 1789564339245,
       "tag": "0000_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789567686763,
+      "tag": "0001_volatile_apocalypse",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789569122339,
+      "tag": "0002_moaning_doomsday",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789572482140,
+      "tag": "0003_nifty_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789578299097,
+      "tag": "0004_solid_molten_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789578835852,
+      "tag": "0005_noisy_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789578853227,
+      "tag": "0006_search_indexes",
+      "breakpoints": true
     }
   ]
 }

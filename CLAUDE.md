@@ -17,7 +17,7 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 - Node.js + TypeScript (strict)
 - Fastify with `fastify-type-provider-zod` and `@fastify/swagger`
 - Drizzle ORM with the `postgres.js` driver
-- PostgreSQL + PostGIS (`pg_trgm` and `unaccent` extensions)
+- PostgreSQL (`pg_trgm` and `unaccent` extensions)
 - Docker / docker-compose for local development
 - AWS via Serverless Framework: Cognito, S3, SQS only
 - Pino for logging
@@ -42,7 +42,6 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 - IDs are UUIDv7 generated in the application.
 - Money is always `integer` cents, with a `_cents` suffix. Never use floats for money.
 - Timestamps are `timestamptz`. Business-day aggregation uses the `America/Sao_Paulo` time zone.
-- Locations are `geography(Point,4326)`.
 - Every route declares Zod schemas for params, query, body **and response**. Responses are serialized only from declared fields.
 - The OpenAPI spec is generated from route schemas and consumed by the frontends to generate typed clients. Treat response schema changes as contract changes.
 - Products, categories and anything referenced by past orders are archived (`archived_at`), never deleted.
@@ -50,7 +49,7 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 ## Non-negotiable rules
 
 1. **`orders.delivery_code` is visible only to the customer who owns the order.** It must never appear in restaurant or driver routes, SSE/event payloads, push notification text or logs (keep it in Pino `redact`). While there are no tests, the guarantee is purely structural: only the customer's own order route may declare the field in a response schema, and Fastify serializes nothing that is not declared. Integration tests will assert its absence when the suite is written.
-2. **Never trust totals from the client.** Checkout recalculates prices, availability, delivery radius, fee range and opening hours from the database.
+2. **Never trust totals from the client.** Checkout recalculates prices, availability, delivery city, delivery fee and opening hours from the database.
 3. **Order status changes go through the state machine** (`docs/architecture.md`) and always write a row to `order_status_history` in the same transaction.
 4. **Delivery confirmation is atomic**: a single conditional `UPDATE ... WHERE status = 'OUT_FOR_DELIVERY' AND delivery_code = $code`, with a per-order attempt limit and every attempt recorded in `delivery_confirmation_attempts`.
 5. **Authorization checks restaurant membership and role in the database on every request** (`restaurant_members.active`), not only Cognito token claims.

@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 1 — Schema and migrations. Phase 0 is done except the AWS deploy, which needs the user's credentials.
+**Current phase:** Phase 2 — Authentication. Blocked on the AWS deploy (see Phase 0). Phase 1 is done.
 
 ---
 
@@ -64,16 +64,43 @@ No business logic. The goal is a repository where the next phase can be written 
 
 ## Phase 1 — Schema and migrations
 
-- [ ] Every table from `myfood-schema.dbml` as Drizzle schema; enums as `pgEnum`
-- [ ] `customType` for `geography(Point,4326)` (Drizzle has no native type) plus `ST_MakePoint` / `ST_DWithin` / `ST_Distance` helpers
-- [ ] Hand-written SQL migration for what DBML cannot express:
-  - [ ] `GIST (location)` on `restaurants`, `customer_addresses`, `orders.delivery_location`
-  - [ ] `GIN (immutable_unaccent(trade_name) gin_trgm_ops)` and the same on `products.name`
-  - [ ] partial unique on `customer_addresses (customer_id) WHERE is_default`
-  - [ ] `CHECK` constraints: `reviews.rating BETWEEN 1 AND 5`, `quantity > 0`, every `*_cents >= 0`
-- [ ] Seed for `cuisine_categories`
+- [x] Every table from `myfood-schema.dbml` as Drizzle schema; enums as `pgEnum`
+- [x] `CHECK` constraints declared on the tables themselves, not in hand-written SQL — Drizzle
+      supports `check()`, so the invariant sits next to the column it constrains
+- [x] Hand-written SQL migration for the one thing Drizzle cannot express:
+      `GIN (immutable_unaccent(...) gin_trgm_ops)` on `restaurants.trade_name` and `products.name`
+- [ ] ~~Seed for `cuisine_categories`~~ — dropped on purpose: the database gets filled by exercising
+      each endpoint as it is built, so the data is always something a real request produced
 
-**Done when:** migrations apply against an empty database, and a hand-run `ST_DWithin` query in psql against seeded rows returns what it should.
+**Done when:** migrations apply against an empty database, and a hand-run accent-insensitive search in psql returns what it should. ✅
+
+### Notes from Phase 1
+
+- **No `geography` (D13).** drizzle-kit quotes unknown column types, so `geography(Point,4326)`
+  came out as a type name Postgres rejects. See architecture.md §9.
+- **drizzle-kit does not order statements by dependency.** Twice a generated migration put
+  `ADD CONSTRAINT ... UNIQUE` *after* the composite foreign key that references it, and the
+  migration failed. Check statement order whenever a migration adds both a constraint and a
+  target for it; reordering the generated file is enough.
+- **Composite foreign keys guard the denormalised columns.** `products`, `orders` and `reviews`
+  each carry a redundant id for authorization or querying, and each is pinned to its parent by a
+  composite FK so the two can never disagree. This is why `menu_categories`, `restaurant_members`
+  and `orders` carry extra `UNIQUE` constraints that look redundant against their primary key.
+- **Verified by hand:** wrong order total, malformed delivery code, change on a non-cash order,
+  a driver from another restaurant, a duplicate display number within one restaurant, a second
+  review on the same order, a review pointing at the wrong restaurant, rating 6, negative price,
+  a product in another restaurant's category, two default addresses, `day_of_week = 7`, and a
+  replayed SQS message — all rejected. Accent-insensitive search matched "Açaí do Zé" for "acai"
+  and "Pizzaria São João" for "sao joao".
+
+> **D13 — no geolocation.** No coordinates anywhere: `restaurants` serves its own city for a flat
+> `delivery_fee_cents`; `delivery_fee_ranges`, `delivery_radius_m` and `orders.distance_m` are gone.
+> The partial unique on `customer_addresses` and the `(city, status)` index are declared in the
+> Drizzle schema, so they need no hand-written SQL. See architecture.md §9 for the reasoning and
+> what coming back to geo would cost.
+>
+> The Docker image and the `postgis` extension are left in place: they cost nothing while unused,
+> and dropping them would mean recreating the volume now and again when geo returns.
 
 ---
 
@@ -93,9 +120,8 @@ No business logic. The goal is a repository where the next phase can be written 
 ## Phase 3 — Restaurant (owner)
 
 - [ ] `POST /restaurants` — creates a `DRAFT` restaurant, the `OWNER` membership and the `restaurant_order_counters` row in one transaction
-- [ ] `PATCH /restaurants/:id`, address geocoded server-side through the `Geocoder` port
+- [ ] `PATCH /restaurants/:id`, including `delivery_fee_cents` and `min_order_cents`
 - [ ] `opening_hours` bulk CRUD, rejecting overlapping shifts on the same weekday
-- [ ] `delivery_fee_ranges` bulk CRUD
 - [ ] `restaurant_cuisines`
 - [ ] `POST /uploads/presign` → client uploads to S3 → `PATCH` stores `logo_key` / `banner_key`
 - [ ] `PATCH /restaurants/:id/status` enforcing the activation checklist (D6), listing what is missing on rejection
@@ -120,12 +146,12 @@ No business logic. The goal is a repository where the next phase can be written 
 ## Phase 5 — Discovery (customer)
 
 - [ ] `customer_addresses` CRUD, including the single-default rule
-- [ ] `GET /restaurants/nearby` — `ST_DWithin` against each restaurant's `delivery_radius_m`, `status = 'ACTIVE'` only, sorted by distance, with `is_open_now` computed
+- [ ] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed
 - [ ] `GET /restaurants/:slug` and `GET /restaurants/:id/menu`
 - [ ] `GET /search` using `pg_trgm` + `immutable_unaccent`
 - [ ] `GET /cuisine-categories`
 
-**Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded outside its delivery radius does not come back.
+**Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded in another city does not come back.
 
 ---
 
@@ -137,7 +163,7 @@ The core. Build the pure domain first — it is the part that will be tested har
 
 - [ ] `calculateLineTotal(product, options)` — the single pricing function (non-negotiable rule 7); ignores `options` for now
 - [ ] `isOpenAt(openingHours, date, tz)` — handles shifts crossing midnight
-- [ ] `resolveDeliveryFee(ranges, distance)` — smallest `max_distance_m >= distance`
+- [ ] `resolveDeliveryFee(restaurant)` — flat fee today; the seam where distance-based pricing returns
 - [ ] `canTransition(from, to, actor)` + the status → timestamp map
 - [ ] `generateDeliveryCode()` using `crypto.randomInt`
 
@@ -150,7 +176,7 @@ One transaction:
 - [ ] load the restaurant; validate `ACTIVE`, `is_accepting_orders`, opening hours
 - [ ] load products by id; validate ownership, `archived_at IS NULL`, `is_available`
 - [ ] recompute the subtotal with `calculateLineTotal` — **client totals are ignored** (rule 2)
-- [ ] compute distance in PostGIS, validate the radius, resolve the fee, validate `min_order_cents`
+- [ ] validate that the address city matches the restaurant city, resolve the fee, validate `min_order_cents`
 - [ ] draw `display_number` from `restaurant_order_counters` (D8) and generate `delivery_code`
 - [ ] snapshot the address into `delivery_*` and the items into `order_items`
 - [ ] insert `orders`, `order_items` and the first `order_status_history` row (`from_status` null)
@@ -228,7 +254,7 @@ Not scheduled. Listed so the deferred verification is not lost, roughly in order
 
 - [ ] Vitest + Testcontainers (real PostGIS per suite, migrations applied, truncation between tests)
 - [ ] `buildTestApp()` using `app.inject()` — no network port
-- [ ] Fake adapters for the four ports: `TokenVerifier`, `EventPublisher`, `FileStorage`, `Geocoder`
+- [ ] Fake adapters for the three ports: `TokenVerifier`, `EventPublisher`, `FileStorage`
 - [ ] **Rule 1:** walk the JSON of every restaurant and driver route asserting `deliveryCode` / `delivery_code` is absent
 - [ ] **Rule 4:** brute-force the delivery code until blocked; two concurrent confirmations → one `DELIVERED`
 - [ ] **D8:** N concurrent checkouts at one restaurant → no `display_number` collision

@@ -1,12 +1,15 @@
 // =====================================================================
 // MyFood — Database schema (MVP)
-// Postgres + PostGIS | IDs: UUIDv7 (gerado na aplicação)
+// Postgres | IDs: UUIDv7 (gerado na aplicação)
 // Dinheiro em centavos (integer) | Datas em timestamptz
 // =====================================================================
 
 Project myfood {
   database_type: 'PostgreSQL'
-  Note: 'MVP sem complementos (option groups). Pagamentos online pendentes da escolha do gateway.'
+  Note: '''
+  MVP sem complementos (option groups). Pagamentos online pendentes da escolha do gateway.
+  Sem geolocalização (D13): entrega definida por cidade, taxa fixa por restaurante.
+  '''
 }
 
 // ---------------------------------------------------------------------
@@ -87,7 +90,6 @@ Table customer_addresses {
   city varchar(80) [not null]
   state char(2) [not null]
   reference varchar(160)
-  location "geography(Point,4326)" [not null]
   is_default boolean [not null, default: false]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
@@ -164,9 +166,8 @@ Table restaurants {
   neighborhood varchar(80) [not null]
   city varchar(80) [not null]
   state char(2) [not null]
-  location "geography(Point,4326)" [not null]
 
-  delivery_radius_m integer [not null]
+  delivery_fee_cents integer [not null, default: 0]
   min_order_cents integer [not null, default: 0]
   avg_prep_time_min smallint [not null, default: 30]
 
@@ -181,12 +182,12 @@ Table restaurants {
 
   indexes {
     status
+    (city, status) [note: 'Descoberta: restaurantes ativos da cidade']
   }
 
   Note: '''
-  Índices criados via migration (não expressáveis em DBML):
-  - GIST (location) para ST_DWithin
-  - GIN (trade_name gin_trgm_ops) para busca com pg_trgm + unaccent
+  Índice criado via migration (não expressável em DBML):
+  - GIN (immutable_unaccent(trade_name) gin_trgm_ops) para busca com pg_trgm
   '''
 }
 
@@ -220,19 +221,6 @@ Table opening_hours {
   }
 
   Note: 'Permite múltiplos turnos por dia (almoço e jantar)'
-}
-
-Table delivery_fee_ranges {
-  id uuid [pk]
-  restaurant_id uuid [not null, ref: > restaurants.id]
-  max_distance_m integer [not null]
-  fee_cents integer [not null]
-
-  indexes {
-    (restaurant_id, max_distance_m) [unique]
-  }
-
-  Note: 'Faixa aplicada = menor max_distance_m >= distância do pedido'
 }
 
 // ---------------------------------------------------------------------
@@ -296,7 +284,6 @@ Table orders {
   total_cents integer [not null]
 
   delivery_code char(4) [not null, note: 'NUNCA exposto em rotas de restaurante/entregador']
-  distance_m integer [not null]
   notes varchar(280)
 
   // Snapshot do endereço de entrega
@@ -308,7 +295,6 @@ Table orders {
   delivery_city varchar(80) [not null]
   delivery_state char(2) [not null]
   delivery_reference varchar(160)
-  delivery_location "geography(Point,4326)" [not null]
 
   cancellation_reason varchar(280)
 

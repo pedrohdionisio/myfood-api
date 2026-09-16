@@ -1,12 +1,22 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
-import { env } from '@/config/env.js'
 import * as schema from './schema/index.js'
 
-export const sql = postgres(env.DATABASE_URL, {
-  max: 10
-})
+export interface DatabaseConnection {
+  db: ReturnType<typeof drizzle<typeof schema>>
+  close: () => Promise<void>
+}
 
-export const db = drizzle(sql, { schema, casing: 'snake_case' })
+export type Transaction = Parameters<Parameters<DatabaseConnection['db']['transaction']>[0]>[0]
 
-export type Database = typeof db
+export function createDatabaseConnection(
+  databaseUrl: string,
+  options: { max?: number } = {}
+): DatabaseConnection {
+  const client = postgres(databaseUrl, { max: options.max ?? 10 })
+
+  return {
+    db: drizzle(client, { schema, casing: 'snake_case' }),
+    close: () => client.end()
+  }
+}

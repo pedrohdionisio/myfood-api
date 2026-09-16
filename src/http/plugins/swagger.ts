@@ -1,9 +1,9 @@
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import { jsonSchemaTransform } from 'fastify-type-provider-zod'
-import type { ZodFastifyInstance } from '@/shared/fastify.js'
+import type { App } from '../app.js'
 
-export async function registerSwagger(app: ZodFastifyInstance): Promise<void> {
+export async function registerSwagger(app: App): Promise<void> {
   await app.register(swagger, {
     openapi: {
       info: {

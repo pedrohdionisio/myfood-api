@@ -1,20 +1,35 @@
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
-import Fastify, { type FastifyServerOptions } from 'fastify'
+import Fastify, {
+  type FastifyBaseLogger,
+  type FastifyInstance,
+  type FastifyServerOptions,
+  type RawReplyDefaultExpression,
+  type RawRequestDefaultExpression,
+  type RawServerDefault
+} from 'fastify'
 import {
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider
 } from 'fastify-type-provider-zod'
-import { env } from '@/config/env.js'
-import { sql } from '@/db/client.js'
-import { healthRoutes } from '@/modules/health/health.routes.js'
-import { registerErrorHandler } from '@/plugins/error-handler.js'
-import { registerSwagger } from '@/plugins/swagger.js'
+import type { DependencyContainer } from 'tsyringe'
+import type { Env } from '@/config/env.js'
 import { uuidv7 } from '@/shared/uuid.js'
+import { registerErrorHandler } from './error-handler.js'
+import { registerSwagger } from './plugins/swagger.js'
+import { registerHealthRoutes } from './routes/health.js'
 
-// delivery_code nunca pode ser logado (regra 1). O Pino não tem wildcard recursivo,
+export type App = FastifyInstance<
+  RawServerDefault,
+  RawRequestDefaultExpression,
+  RawReplyDefaultExpression,
+  FastifyBaseLogger,
+  ZodTypeProvider
+>
+
+// delivery_code nunca pode ser logado. O Pino não tem wildcard recursivo,
 // então os níveis de aninhamento são escritos um a um.
 const REDACTED_PATHS = [
   'req.headers.authorization',
@@ -27,7 +42,7 @@ const REDACTED_PATHS = [
   '*.*.delivery_code'
 ]
 
-function buildLoggerOptions(): NonNullable<FastifyServerOptions['logger']> {
+function buildLoggerOptions(env: Env): NonNullable<FastifyServerOptions['logger']> {
   return {
     level: env.LOG_LEVEL,
     redact: { paths: REDACTED_PATHS, censor: '[REDACTED]' },
@@ -42,9 +57,9 @@ function buildLoggerOptions(): NonNullable<FastifyServerOptions['logger']> {
   }
 }
 
-export async function buildApp() {
+export async function buildApp(env: Env, container: DependencyContainer): Promise<App> {
   const app = Fastify({
-    logger: buildLoggerOptions(),
+    logger: buildLoggerOptions(env),
     genReqId: () => uuidv7()
   }).withTypeProvider<ZodTypeProvider>()
 
@@ -56,27 +71,13 @@ export async function buildApp() {
   })
 
   await app.register(helmet, { contentSecurityPolicy: false })
-
-  await app.register(cors, {
-    origin: true,
-    credentials: true
-  })
-
-  await app.register(rateLimit, {
-    max: 100,
-    timeWindow: '1 minute'
-  })
+  await app.register(cors, { origin: true, credentials: true })
+  await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
   await registerSwagger(app)
   registerErrorHandler(app)
 
-  await app.register(healthRoutes)
-
-  app.addHook('onClose', async () => {
-    await sql.end()
-  })
+  registerHealthRoutes(app, container)
 
   return app
 }
-
-export type App = Awaited<ReturnType<typeof buildApp>>

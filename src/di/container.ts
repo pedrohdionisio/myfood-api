@@ -1,5 +1,6 @@
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
+import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
 import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
@@ -11,6 +12,9 @@ import { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCustome
 import { SignInRestaurantUserUseCase } from '@/application/useCases/auth/SignInRestaurantUserUseCase.js'
 import { SignUpCustomerUseCase } from '@/application/useCases/auth/SignUpCustomerUseCase.js'
 import { SignUpRestaurantUserUseCase } from '@/application/useCases/auth/SignUpRestaurantUserUseCase.js'
+import { ListCuisineCategoriesUseCase } from '@/application/useCases/cuisines/ListCuisineCategoriesUseCase.js'
+import { ListRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/ListRestaurantCuisinesUseCase.js'
+import { ReplaceRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/ReplaceRestaurantCuisinesUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
@@ -22,6 +26,7 @@ import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
+import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
@@ -101,6 +106,12 @@ export function buildContainer(env: Env): DependencyContainer {
     { lifecycle: Lifecycle.Singleton }
   )
 
+  container.register<ICuisinesRepository>(
+    TOKENS.CuisinesRepository,
+    { useClass: DrizzleCuisinesRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
   container.register(
     TOKENS.SignUpCustomerUseCase,
     { useClass: SignUpCustomerUseCase },
@@ -172,6 +183,24 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ReplaceOpeningHoursUseCase,
     { useClass: ReplaceOpeningHoursUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListCuisineCategoriesUseCase,
+    { useClass: ListCuisineCategoriesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListRestaurantCuisinesUseCase,
+    { useClass: ListRestaurantCuisinesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ReplaceRestaurantCuisinesUseCase,
+    { useClass: ReplaceRestaurantCuisinesUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

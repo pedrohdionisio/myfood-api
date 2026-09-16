@@ -156,7 +156,11 @@ No business logic. The goal is a repository where the next phase can be written 
       the **whole week** in minutes, not per weekday: a shift crossing midnight occupies the next
       day, so Friday 18:00–02:00 conflicts with Saturday 01:00–05:00. `validateOpeningHours` is
       pure and is the function Phase 6's `isOpenAt` builds on
-- [ ] `restaurant_cuisines`
+- [x] `restaurant_cuisines` — `GET` and `PUT .../cuisines`, the same bulk-replace shape as the
+      opening hours. An id outside the catalogue is refused with a 422 naming it, rather than
+      surfacing as a foreign-key violation
+- [x] `GET /cuisine-categories` — **pulled forward from Phase 5**: without the catalogue the owner
+      has nowhere to get the ids from. Public, no token; the same route the customer app consumes
 - [ ] `POST /uploads/presign` → client uploads to S3 → `PATCH` stores `logo_key` / `banner_key`
 - [ ] `PATCH /restaurants/:id/status` enforcing the activation checklist (D6), listing what is missing on rejection
 - [ ] `PATCH /restaurants/:id/accepting-orders`
@@ -183,7 +187,7 @@ No business logic. The goal is a repository where the next phase can be written 
 - [ ] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed
 - [ ] `GET /restaurants/:slug` and `GET /restaurants/:id/menu`
 - [ ] `GET /search` using `pg_trgm` + `immutable_unaccent`
-- [ ] `GET /cuisine-categories`
+- [x] `GET /cuisine-categories` — built in Phase 3, alongside `restaurant_cuisines`
 
 **Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded in another city does not come back.
 

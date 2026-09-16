@@ -11,6 +11,7 @@ export const TOKENS = {
   MembershipsRepository: Symbol('MembershipsRepository'),
   RestaurantsRepository: Symbol('RestaurantsRepository'),
   OpeningHoursRepository: Symbol('OpeningHoursRepository'),
+  CuisinesRepository: Symbol('CuisinesRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
   SignInCustomerUseCase: Symbol('SignInCustomerUseCase'),
@@ -24,5 +25,8 @@ export const TOKENS = {
   GetRestaurantUseCase: Symbol('GetRestaurantUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ListOpeningHoursUseCase: Symbol('ListOpeningHoursUseCase'),
-  ReplaceOpeningHoursUseCase: Symbol('ReplaceOpeningHoursUseCase')
+  ReplaceOpeningHoursUseCase: Symbol('ReplaceOpeningHoursUseCase'),
+  ListCuisineCategoriesUseCase: Symbol('ListCuisineCategoriesUseCase'),
+  ListRestaurantCuisinesUseCase: Symbol('ListRestaurantCuisinesUseCase'),
+  ReplaceRestaurantCuisinesUseCase: Symbol('ReplaceRestaurantCuisinesUseCase')
 } as const

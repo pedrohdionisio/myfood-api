@@ -21,8 +21,10 @@ import { CreateMemberUseCase } from '@/application/useCases/members/CreateMember
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
+import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
+import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
 import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
@@ -187,6 +189,18 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.UpdateRestaurantUseCase,
     { useClass: UpdateRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ActivateRestaurantUseCase,
+    { useClass: ActivateRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.SetAcceptingOrdersUseCase,
+    { useClass: SetAcceptingOrdersUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

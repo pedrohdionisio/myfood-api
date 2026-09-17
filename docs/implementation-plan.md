@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 3 — Restaurant (owner). Phases 0–2 are done.
+**Current phase:** Phase 4 — Menu. Phases 0–3 are done.
 
 ---
 
@@ -168,10 +168,32 @@ No business logic. The goal is a repository where the next phase can be written 
       type as conditions, so the S3 refuses an oversized file instead of the API trusting a declared
       length. The key stored is a prefix; the worker fills `media/{key}/{sm,md,lg}.webp` from the
       S3 notification (architecture.md §6.1)
-- [ ] `PATCH /restaurants/:id/status` enforcing the activation checklist (D6), listing what is missing on rejection
-- [ ] `PATCH /restaurants/:id/accepting-orders`
+- [x] `PATCH /restaurants/:restaurantId/status` enforcing the activation checklist (D6), listing
+      what is missing on rejection. The body only accepts `ACTIVE`; the checklist dropped the
+      address, which no restaurant can be missing (architecture.md §5)
+- [x] `PATCH /restaurants/:restaurantId/accepting-orders`
 
-**Done when:** an incomplete restaurant is refused `ACTIVE` with the missing items named, and an owner cannot touch a restaurant they are not a member of.
+**Done when:** an incomplete restaurant is refused `ACTIVE` with the missing items named, and an owner cannot touch a restaurant they are not a member of. ✅
+
+### Notes from Phase 3
+
+- **The address checklist item was vacuous.** Every address column is `NOT NULL` and required by
+  `POST /restaurants`, so it can never be missing. The checklist is opening hours + at least one
+  available product, returned as codes in `details.missing`.
+- **Status and `is_accepting_orders` are outside `IUpdateRestaurantData`.** Both have their own
+  repository methods, so no future field added to the generic `PATCH` body can move a restaurant
+  to `ACTIVE` without the checklist.
+- **A `sql` template does not qualify column references.** Interpolating `openingHours.restaurantId`
+  and `restaurants.id` into a template rendered `where "restaurant_id" = "id"`, which inside the
+  subquery compared two columns of `opening_hours` and was silently always false — no error, just a
+  wrong answer. The checklist uses the query builder's `exists()`, which qualifies. Worth
+  remembering for the analytics queries in Phase 9.
+- **Images:** presigned POST, three WebP variants produced by an SQS worker, keys stored as
+  prefixes. See architecture.md §6.1 and the Phase 0 / Phase 9 entries this touched.
+- **Verified by hand:** activation refused with `missing: ["AVAILABLE_PRODUCT"]` and accepted once
+  a product existed; `SUSPENDED` refused by the body schema (422); a restaurant the caller is not a
+  member of (403); no token (401); the store pause toggling; and the full image flow for a logo and
+  a banner, including the three public variants and the private original.
 
 ---
 

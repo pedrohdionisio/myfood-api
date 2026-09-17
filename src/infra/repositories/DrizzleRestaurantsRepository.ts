@@ -1,4 +1,4 @@
-import { eq, like, or } from 'drizzle-orm'
+import { and, eq, exists, isNull, like, or, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   ICreateRestaurantData,
@@ -7,10 +7,23 @@ import type {
   IUpdateRestaurantData
 } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
-import { restaurantMembers, restaurantOrderCounters, restaurants } from '@/db/schema/index.js'
+import {
+  openingHours,
+  products,
+  restaurantMembers,
+  restaurantOrderCounters,
+  restaurants
+} from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
+import type { IActivationChecklist } from '@/domain/activation.js'
+import type { RestaurantStatus } from '@/domain/enums.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
 import { violatesUniqueConstraint } from './unique-violation.js'
+
+type RestaurantUpdateValues = IUpdateRestaurantData & {
+  status?: RestaurantStatus | undefined
+  isAcceptingOrders?: boolean | undefined
+}
 
 const DUPLICATE_CNPJ = 'restaurants_cnpj_unique'
 const DUPLICATE_SLUG = 'restaurants_slug_unique'
@@ -115,10 +128,10 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
     }
   }
 
-  async update(id: string, data: IUpdateRestaurantData): Promise<IRestaurant> {
+  private async applyUpdate(id: string, values: RestaurantUpdateValues): Promise<IRestaurant> {
     const [row] = await this.database.db
       .update(restaurants)
-      .set(data)
+      .set(values)
       .where(eq(restaurants.id, id))
       .returning(RESTAURANT_COLUMNS)
 
@@ -127,5 +140,55 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
     }
 
     return row
+  }
+
+  async update(id: string, data: IUpdateRestaurantData): Promise<IRestaurant> {
+    return this.applyUpdate(id, data)
+  }
+
+  async findActivationChecklist(id: string): Promise<IActivationChecklist> {
+    const db = this.database.db
+
+    // exists() do query builder, e não um template sql`...`: dentro do template o Drizzle
+    // escreve a coluna sem qualificar a tabela, e `restaurant_id = id` passa a comparar duas
+    // colunas do próprio subquery — sempre falso, sem erro nenhum.
+    const [row] = await db
+      .select({
+        hasOpeningHours: exists(
+          db
+            .select({ one: sql`1` })
+            .from(openingHours)
+            .where(eq(openingHours.restaurantId, restaurants.id))
+        ).mapWith(Boolean),
+        hasAvailableProduct: exists(
+          db
+            .select({ one: sql`1` })
+            .from(products)
+            .where(
+              and(
+                eq(products.restaurantId, restaurants.id),
+                eq(products.isAvailable, true),
+                isNull(products.archivedAt)
+              )
+            )
+        ).mapWith(Boolean)
+      })
+      .from(restaurants)
+      .where(eq(restaurants.id, id))
+      .limit(1)
+
+    if (!row) {
+      throw new NotFoundError(`Restaurante ${id} não encontrado.`)
+    }
+
+    return row
+  }
+
+  async setStatus(id: string, status: RestaurantStatus): Promise<IRestaurant> {
+    return this.applyUpdate(id, { status })
+  }
+
+  async setAcceptingOrders(id: string, isAcceptingOrders: boolean): Promise<IRestaurant> {
+    return this.applyUpdate(id, { isAcceptingOrders })
   }
 }

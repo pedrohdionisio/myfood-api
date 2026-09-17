@@ -70,7 +70,8 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 ## 5. Restaurants
 
 - **Onboarding status:** `DRAFT` → `ACTIVE` → `SUSPENDED`. Only `ACTIVE` restaurants appear in the app.
-- **Activation is self-service, behind a checklist.** There is no platform admin role. The owner calls `PATCH /restaurants/:id/status`, and the API accepts `ACTIVE` only when the address, at least one opening-hours shift and at least one available product exist. The rejection response lists what is missing, which is exactly what the dashboard onboarding screen renders.
+- **Activation is self-service, behind a checklist.** There is no platform admin role. The owner calls `PATCH /restaurants/:id/status`, and the API accepts `ACTIVE` only when at least one opening-hours shift and at least one available product exist. The rejection is a 422 whose `details.missing` lists the codes (`OPENING_HOURS`, `AVAILABLE_PRODUCT`), which is what the dashboard onboarding screen renders. The address is **not** part of the checklist: every address column is `NOT NULL` and `POST /restaurants` requires them, so a restaurant without an address cannot exist to be rejected.
+- **The route only accepts `ACTIVE`.** `SUSPENDED` is a platform action with no owner-facing path — `requireMembership` already refuses every restaurant-scoped route on a suspended restaurant — and going back to `DRAFT` has no screen. Pausing the store is `is_accepting_orders`, not a status change. `setStatus` is a repository method of its own, deliberately outside the generic update, so status cannot be changed by a route that skips the checklist.
 - **Multiple owners are allowed** (business partners). Nothing restricts a restaurant to a single `OWNER` membership.
 - **`is_accepting_orders`** is a manual "pause store" switch, separate from opening hours.
 - **Opening hours** allow multiple shifts per day. If `closes_at < opens_at`, the shift crosses midnight.

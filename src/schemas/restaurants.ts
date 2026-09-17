@@ -47,6 +47,16 @@ export const updateRestaurantBodySchema = z
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Envie ao menos um campo para atualizar.')
 
+// Só ACTIVE: SUSPENDED é ação de plataforma (o requireMembership já barra quem é membro de um
+// restaurante suspenso) e voltar para DRAFT não tem tela. Pausar a loja é accepting-orders.
+export const activateRestaurantBodySchema = z.object({
+  status: z.literal('ACTIVE')
+})
+
+export const acceptingOrdersBodySchema = z.object({
+  isAcceptingOrders: z.boolean()
+})
+
 export const restaurantResponseSchema = z.object({
   id: z.uuid(),
   slug: z.string(),

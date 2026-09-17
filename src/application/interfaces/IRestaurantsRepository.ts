@@ -1,3 +1,4 @@
+import type { IActivationChecklist } from '@/domain/activation.js'
 import type { RestaurantStatus } from '@/domain/enums.js'
 
 export interface IRestaurant {
@@ -76,4 +77,10 @@ export interface IRestaurantsRepository {
   create(data: ICreateRestaurantData): Promise<IRestaurant>
 
   update(id: string, data: IUpdateRestaurantData): Promise<IRestaurant>
+
+  findActivationChecklist(id: string): Promise<IActivationChecklist>
+
+  setStatus(id: string, status: RestaurantStatus): Promise<IRestaurant>
+
+  setAcceptingOrders(id: string, isAcceptingOrders: boolean): Promise<IRestaurant>
 }

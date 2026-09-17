@@ -5,6 +5,7 @@ import type {
   IDiscoveryFilter,
   IRestaurant,
   IRestaurantsRepository,
+  ISearchFilter,
   IUpdateRestaurantData
 } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
@@ -19,6 +20,7 @@ import { TOKENS } from '@/di/tokens.js'
 import type { IActivationChecklist } from '@/domain/activation.js'
 import type { RestaurantStatus } from '@/domain/enums.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
+import { matchesTerm, similarityTo } from './trigram-search.js'
 import { violatesUniqueConstraint } from './unique-violation.js'
 
 type RestaurantUpdateValues = IUpdateRestaurantData & {
@@ -97,6 +99,24 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
       .orderBy(desc(restaurants.ratingAvg), asc(restaurants.tradeName), asc(restaurants.id))
       .limit(limit)
       .offset(offset)
+  }
+
+  async searchInCity(filter: ISearchFilter): Promise<IRestaurant[]> {
+    const { term, city, state, limit } = filter
+
+    return this.database.db
+      .select(RESTAURANT_COLUMNS)
+      .from(restaurants)
+      .where(
+        and(
+          eq(restaurants.status, 'ACTIVE'),
+          eq(restaurants.state, state),
+          sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`,
+          matchesTerm(restaurants.tradeName, term)
+        )
+      )
+      .orderBy(similarityTo(restaurants.tradeName, term), asc(restaurants.tradeName))
+      .limit(limit)
   }
 
   async findById(id: string): Promise<IRestaurant | null> {

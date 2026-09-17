@@ -1,3 +1,5 @@
+import type { ISearchFilter } from './IRestaurantsRepository.js'
+
 export interface IProduct {
   id: string
   menuCategoryId: string
@@ -27,8 +29,23 @@ export interface IUpdateProductData {
   imageKey?: string | null | undefined
 }
 
+export interface IProductSearchHit {
+  id: string
+  name: string
+  description: string | null
+  priceCents: number
+  imageKey: string | null
+  isAvailable: boolean
+  restaurantId: string
+  restaurantSlug: string
+  restaurantTradeName: string
+  restaurantLogoKey: string | null
+}
+
 export interface IProductsRepository {
   listByRestaurant(restaurantId: string, menuCategoryId?: string): Promise<IProduct[]>
+
+  searchInCity(filter: ISearchFilter): Promise<IProductSearchHit[]>
 
   findById(restaurantId: string, id: string): Promise<IProduct | null>
 

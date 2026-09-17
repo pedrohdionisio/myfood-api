@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { IPublicMenuCategory } from '@/application/useCases/restaurants/GetPublicMenuUseCase.js'
+import type { IPublicMenuCategory } from '@/application/useCases/discovery/GetPublicMenuUseCase.js'
 import { buildImageUrls } from '@/domain/images.js'
 import { imageUrlsSchema } from './uploads.js'
 

@@ -6,9 +6,9 @@ import type {
   IRestaurantsRepository
 } from '@/application/interfaces/IRestaurantsRepository.js'
 import { TOKENS } from '@/di/tokens.js'
-import { DomainError, NotFoundError } from '@/domain/errors.js'
 import { type IShift, isOpenAt } from '@/domain/opening-hours.js'
 import { BUSINESS_TIME_ZONE } from '@/domain/time.js'
+import { resolveCustomerAddress } from './resolveCustomerAddress.js'
 
 export interface IListRestaurantsInput {
   customerId: string
@@ -42,22 +42,7 @@ export class ListRestaurantsUseCase {
   async execute(input: IListRestaurantsInput): Promise<IListRestaurantsResult> {
     const { customerId, addressId, page, perPage } = input
 
-    const addresses = await this.addresses.listByCustomer(customerId)
-    const address = addressId ? addresses.find((item) => item.id === addressId) : addresses[0]
-
-    if (!address) {
-      if (addressId) {
-        throw new NotFoundError(
-          `Endereço ${addressId} não encontrado para o cliente ${customerId}.`
-        )
-      }
-
-      throw new DomainError(
-        `Cliente ${customerId} não tem endereço cadastrado.`,
-        'Cadastre um endereço para ver os restaurantes que entregam na sua região.',
-        { reason: 'NO_ADDRESS' }
-      )
-    }
+    const address = await resolveCustomerAddress(this.addresses, customerId, addressId)
 
     // Uma linha a mais do que a página resolve o hasMore sem um count sobre a cidade inteira.
     const rows = await this.restaurants.listActiveByCity({

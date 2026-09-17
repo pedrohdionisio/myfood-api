@@ -25,6 +25,10 @@ import { DeleteCustomerAddressUseCase } from '@/application/useCases/customerAdd
 import { ListCustomerAddressesUseCase } from '@/application/useCases/customerAddresses/ListCustomerAddressesUseCase.js'
 import { SetDefaultCustomerAddressUseCase } from '@/application/useCases/customerAddresses/SetDefaultCustomerAddressUseCase.js'
 import { UpdateCustomerAddressUseCase } from '@/application/useCases/customerAddresses/UpdateCustomerAddressUseCase.js'
+import { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetPublicMenuUseCase.js'
+import { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
+import { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
+import { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { ArchiveMenuCategoryUseCase } from '@/application/useCases/menuCategories/ArchiveMenuCategoryUseCase.js'
@@ -42,10 +46,7 @@ import { SetProductAvailabilityUseCase } from '@/application/useCases/products/S
 import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
-import { GetPublicMenuUseCase } from '@/application/useCases/restaurants/GetPublicMenuUseCase.js'
-import { GetPublicRestaurantUseCase } from '@/application/useCases/restaurants/GetPublicRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
-import { ListRestaurantsUseCase } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
@@ -232,6 +233,12 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.GetPublicMenuUseCase,
     { useClass: GetPublicMenuUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.SearchUseCase,
+    { useClass: SearchUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

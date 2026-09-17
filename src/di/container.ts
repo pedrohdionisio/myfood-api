@@ -42,6 +42,8 @@ import { SetProductAvailabilityUseCase } from '@/application/useCases/products/S
 import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
+import { GetPublicMenuUseCase } from '@/application/useCases/restaurants/GetPublicMenuUseCase.js'
+import { GetPublicRestaurantUseCase } from '@/application/useCases/restaurants/GetPublicRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
 import { ListRestaurantsUseCase } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
@@ -218,6 +220,18 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ListRestaurantsUseCase,
     { useClass: ListRestaurantsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetPublicRestaurantUseCase,
+    { useClass: GetPublicRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetPublicMenuUseCase,
+    { useClass: GetPublicMenuUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

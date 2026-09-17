@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { IRestaurant } from '@/application/interfaces/IRestaurantsRepository.js'
+import type { IPublicRestaurant } from '@/application/useCases/restaurants/GetPublicRestaurantUseCase.js'
 import type { IDiscoveredRestaurant } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { isValidCnpj } from '@/domain/cnpj.js'
 import { RESTAURANT_STATUSES } from '@/domain/enums.js'
@@ -118,6 +119,32 @@ export const listRestaurantsResponseSchema = z.object({
   perPage: z.int(),
   hasMore: z.boolean()
 })
+
+export const restaurantSlugParamsSchema = z.object({
+  slug: z.string().min(1).max(80)
+})
+
+export const publicRestaurantResponseSchema = restaurantSummaryResponseSchema.extend({
+  neighborhood: z.string(),
+  openingHours: z.array(
+    z.object({
+      dayOfWeek: z.int(),
+      opensAt: z.string(),
+      closesAt: z.string()
+    })
+  )
+})
+
+export function toPublicRestaurantResponse(
+  restaurant: IPublicRestaurant,
+  mediaBaseUrl: string
+): z.infer<typeof publicRestaurantResponseSchema> {
+  return {
+    ...restaurant,
+    logoUrls: restaurant.logoKey ? buildImageUrls(mediaBaseUrl, restaurant.logoKey) : null,
+    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null
+  }
+}
 
 export function toRestaurantSummaryResponse(
   restaurant: IDiscoveredRestaurant,

@@ -83,6 +83,8 @@ export interface IRestaurantsRepository {
 
   findById(id: string): Promise<IRestaurant | null>
 
+  findBySlug(slug: string): Promise<IRestaurant | null>
+
   create(data: ICreateRestaurantData): Promise<IRestaurant>
 
   update(id: string, data: IUpdateRestaurantData): Promise<IRestaurant>

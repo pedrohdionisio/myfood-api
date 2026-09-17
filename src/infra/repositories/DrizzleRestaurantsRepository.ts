@@ -109,6 +109,16 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
     return row ?? null
   }
 
+  async findBySlug(slug: string): Promise<IRestaurant | null> {
+    const [row] = await this.database.db
+      .select(RESTAURANT_COLUMNS)
+      .from(restaurants)
+      .where(eq(restaurants.slug, slug))
+      .limit(1)
+
+    return row ?? null
+  }
+
   async create(data: ICreateRestaurantData): Promise<IRestaurant> {
     const { ownerUserId, ...values } = data
 

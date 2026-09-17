@@ -1,9 +1,16 @@
 import type { DependencyContainer } from 'tsyringe'
+import type { GetPublicMenuUseCase } from '@/application/useCases/restaurants/GetPublicMenuUseCase.js'
+import type { GetPublicRestaurantUseCase } from '@/application/useCases/restaurants/GetPublicRestaurantUseCase.js'
 import type { ListRestaurantsUseCase } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
+import { restaurantScopeParamsSchema } from '@/schemas/common.js'
+import { publicMenuResponseSchema, toPublicMenuResponse } from '@/schemas/menu.js'
 import {
   listRestaurantsQuerySchema,
   listRestaurantsResponseSchema,
+  publicRestaurantResponseSchema,
+  restaurantSlugParamsSchema,
+  toPublicRestaurantResponse,
   toRestaurantSummaryResponse
 } from '@/schemas/restaurants.js'
 import type { App } from '../app.js'
@@ -11,10 +18,14 @@ import { requireCustomer } from '../plugins/auth.js'
 
 export function registerDiscoveryRoutes(app: App, container: DependencyContainer): void {
   const listRestaurants = container.resolve<ListRestaurantsUseCase>(TOKENS.ListRestaurantsUseCase)
+  const getPublicRestaurant = container.resolve<GetPublicRestaurantUseCase>(
+    TOKENS.GetPublicRestaurantUseCase
+  )
+  const getPublicMenu = container.resolve<GetPublicMenuUseCase>(TOKENS.GetPublicMenuUseCase)
   const mediaBaseUrl = container.resolve<string>(TOKENS.MediaBaseUrl)
 
   app.get(
-    '/restaurants',
+    '/discovery/restaurants',
     {
       schema: {
         tags: ['discovery'],
@@ -39,5 +50,36 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
         items: result.items.map((item) => toRestaurantSummaryResponse(item, mediaBaseUrl))
       }
     }
+  )
+
+  app.get(
+    '/discovery/restaurants/:slug',
+    {
+      schema: {
+        tags: ['discovery'],
+        summary: 'Página pública do restaurante, com a grade de horários',
+        params: restaurantSlugParamsSchema,
+        response: { 200: publicRestaurantResponseSchema }
+      }
+    },
+    async (request) =>
+      toPublicRestaurantResponse(
+        await getPublicRestaurant.execute(request.params.slug),
+        mediaBaseUrl
+      )
+  )
+
+  app.get(
+    '/discovery/restaurants/:restaurantId/menu',
+    {
+      schema: {
+        tags: ['discovery'],
+        summary: 'Cardápio público, por categoria ativa, sem as categorias vazias',
+        params: restaurantScopeParamsSchema,
+        response: { 200: publicMenuResponseSchema }
+      }
+    },
+    async (request) =>
+      toPublicMenuResponse(await getPublicMenu.execute(request.params.restaurantId), mediaBaseUrl)
   )
 }

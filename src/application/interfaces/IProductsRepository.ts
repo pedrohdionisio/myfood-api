@@ -47,6 +47,8 @@ export interface IProductsRepository {
 
   searchInCity(filter: ISearchFilter): Promise<IProductSearchHit[]>
 
+  listByIds(restaurantId: string, ids: string[]): Promise<IProduct[]>
+
   findById(restaurantId: string, id: string): Promise<IProduct | null>
 
   create(data: ICreateProductData): Promise<IProduct>

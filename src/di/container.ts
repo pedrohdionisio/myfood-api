@@ -7,6 +7,7 @@ import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.j
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
+import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
 import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
@@ -38,6 +39,7 @@ import { ReorderMenuCategoriesUseCase } from '@/application/useCases/menuCategor
 import { UpdateMenuCategoryUseCase } from '@/application/useCases/menuCategories/UpdateMenuCategoryUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
+import { CreateOrderUseCase } from '@/application/useCases/orders/CreateOrderUseCase.js'
 import { ArchiveProductUseCase } from '@/application/useCases/products/ArchiveProductUseCase.js'
 import { CreateProductUseCase } from '@/application/useCases/products/CreateProductUseCase.js'
 import { ListProductsUseCase } from '@/application/useCases/products/ListProductsUseCase.js'
@@ -63,6 +65,7 @@ import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomer
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
 import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMenuCategoriesRepository.js'
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
+import { DrizzleOrdersRepository } from '@/infra/repositories/DrizzleOrdersRepository.js'
 import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
@@ -395,6 +398,18 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.DeleteCustomerAddressUseCase,
     { useClass: DeleteCustomerAddressUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IOrdersRepository>(
+    TOKENS.OrdersRepository,
+    { useClass: DrizzleOrdersRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateOrderUseCase,
+    { useClass: CreateOrderUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

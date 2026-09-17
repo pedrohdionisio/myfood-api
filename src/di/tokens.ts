@@ -18,6 +18,7 @@ export const TOKENS = {
   CuisinesRepository: Symbol('CuisinesRepository'),
   MenuCategoriesRepository: Symbol('MenuCategoriesRepository'),
   ProductsRepository: Symbol('ProductsRepository'),
+  OrdersRepository: Symbol('OrdersRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
   SignInCustomerUseCase: Symbol('SignInCustomerUseCase'),
@@ -33,6 +34,7 @@ export const TOKENS = {
   GetPublicRestaurantUseCase: Symbol('GetPublicRestaurantUseCase'),
   GetPublicMenuUseCase: Symbol('GetPublicMenuUseCase'),
   SearchUseCase: Symbol('SearchUseCase'),
+  CreateOrderUseCase: Symbol('CreateOrderUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ActivateRestaurantUseCase: Symbol('ActivateRestaurantUseCase'),
   SetAcceptingOrdersUseCase: Symbol('SetAcceptingOrdersUseCase'),

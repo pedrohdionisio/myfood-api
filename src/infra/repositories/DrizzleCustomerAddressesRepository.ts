@@ -60,6 +60,16 @@ export class DrizzleCustomerAddressesRepository implements ICustomerAddressesRep
       .orderBy(desc(customerAddresses.isDefault), asc(customerAddresses.createdAt))
   }
 
+  async findById(customerId: string, id: string): Promise<ICustomerAddress | null> {
+    const [row] = await this.database.db
+      .select(CUSTOMER_ADDRESS_COLUMNS)
+      .from(customerAddresses)
+      .where(and(eq(customerAddresses.id, id), eq(customerAddresses.customerId, customerId)))
+      .limit(1)
+
+    return row ?? null
+  }
+
   async create(data: ICreateCustomerAddressData): Promise<ICustomerAddress> {
     const { customerId, isDefault, ...fields } = data
 

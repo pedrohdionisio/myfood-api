@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   ICreateProductData,
@@ -101,6 +101,25 @@ export class DrizzleProductsRepository implements IProductsRepository {
       )
       .orderBy(similarityTo(products.name, term), asc(products.name))
       .limit(limit)
+  }
+
+  async listByIds(restaurantId: string, ids: string[]): Promise<IProduct[]> {
+    if (ids.length === 0) {
+      return []
+    }
+
+    const rows = await this.database.db
+      .select(PRODUCT_COLUMNS)
+      .from(products)
+      .where(
+        and(
+          eq(products.restaurantId, restaurantId),
+          inArray(products.id, ids),
+          isNull(products.archivedAt)
+        )
+      )
+
+    return rows.map(toProduct)
   }
 
   async findById(restaurantId: string, id: string): Promise<IProduct | null> {

@@ -41,6 +41,8 @@ export interface IUpdateCustomerAddressData {
 export interface ICustomerAddressesRepository {
   listByCustomer(customerId: string): Promise<ICustomerAddress[]>
 
+  findById(customerId: string, id: string): Promise<ICustomerAddress | null>
+
   create(data: ICreateCustomerAddressData): Promise<ICustomerAddress>
 
   update(

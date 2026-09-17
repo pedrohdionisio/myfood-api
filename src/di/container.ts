@@ -2,10 +2,12 @@ import { type DependencyContainer, Lifecycle, container as rootContainer } from 
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
 import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
 import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
+import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
+import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
 import { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCustomerUseCase.js'
@@ -22,10 +24,14 @@ import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
+import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
+import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
 import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
+import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
+import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
@@ -75,6 +81,16 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register<IAuthGateway>(TOKENS.RestaurantAuthGateway, {
     useValue: restaurantAuthGateway
   })
+
+  container.register<IStorageGateway>(TOKENS.StorageGateway, {
+    useValue: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION, credentials)
+  })
+
+  container.register<IImageProcessor>(TOKENS.ImageProcessor, {
+    useValue: new SharpImageProcessor()
+  })
+
+  container.register<string>(TOKENS.MediaBaseUrl, { useValue: env.MEDIA_BASE_URL })
 
   container.register<ICustomersRepository>(
     TOKENS.CustomersRepository,
@@ -201,6 +217,18 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ReplaceRestaurantCuisinesUseCase,
     { useClass: ReplaceRestaurantCuisinesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateImageUploadUseCase,
+    { useClass: CreateImageUploadUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ProcessImageVariantsUseCase,
+    { useClass: ProcessImageVariantsUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

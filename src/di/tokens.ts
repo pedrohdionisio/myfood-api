@@ -5,6 +5,9 @@ export const TOKENS = {
   RestaurantTokenVerifier: Symbol('RestaurantTokenVerifier'),
   CustomerAuthGateway: Symbol('CustomerAuthGateway'),
   RestaurantAuthGateway: Symbol('RestaurantAuthGateway'),
+  StorageGateway: Symbol('StorageGateway'),
+  ImageProcessor: Symbol('ImageProcessor'),
+  MediaBaseUrl: Symbol('MediaBaseUrl'),
 
   CustomersRepository: Symbol('CustomersRepository'),
   RestaurantUsersRepository: Symbol('RestaurantUsersRepository'),
@@ -28,5 +31,7 @@ export const TOKENS = {
   ReplaceOpeningHoursUseCase: Symbol('ReplaceOpeningHoursUseCase'),
   ListCuisineCategoriesUseCase: Symbol('ListCuisineCategoriesUseCase'),
   ListRestaurantCuisinesUseCase: Symbol('ListRestaurantCuisinesUseCase'),
-  ReplaceRestaurantCuisinesUseCase: Symbol('ReplaceRestaurantCuisinesUseCase')
+  ReplaceRestaurantCuisinesUseCase: Symbol('ReplaceRestaurantCuisinesUseCase'),
+  CreateImageUploadUseCase: Symbol('CreateImageUploadUseCase'),
+  ProcessImageVariantsUseCase: Symbol('ProcessImageVariantsUseCase')
 } as const

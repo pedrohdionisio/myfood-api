@@ -71,19 +71,80 @@ resources:
 
     MediaBucket:
       Type: AWS::S3::Bucket
+      # O S3 valida a fila no momento em que a notificação é criada, então a policy que
+      # autoriza o SendMessage precisa existir antes do bucket.
+      DependsOn: ImageProcessingQueuePolicy
       Properties:
         BucketName: myfood-media-${sls:stage}-${aws:accountId}
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
-          BlockPublicPolicy: true
           IgnorePublicAcls: true
-          RestrictPublicBuckets: true
+          # Falsos porque media/* é lido direto pelo app e pelo dashboard. As ACLs seguem
+          # bloqueadas: quem libera a leitura é a bucket policy, e só naquele prefixo.
+          BlockPublicPolicy: false
+          RestrictPublicBuckets: false
         CorsConfiguration:
           CorsRules:
-            - AllowedMethods: [PUT, GET]
+            - AllowedMethods: [POST, GET]
               AllowedOrigins: ['*']
               AllowedHeaders: ['*']
               MaxAge: 3000
+        NotificationConfiguration:
+          QueueConfigurations:
+            - Event: s3:ObjectCreated:*
+              Queue: !GetAtt ImageProcessingQueue.Arn
+              # O filtro de prefixo é o que impede o worker de reenfileirar o próprio
+              # trabalho: ele lê de originals/ e escreve em media/.
+              Filter:
+                S3Key:
+                  Rules:
+                    - Name: prefix
+                      Value: originals/
+
+    MediaBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref MediaBucket
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadProcessedMedia
+              Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: !Sub '${MediaBucket.Arn}/media/*'
+
+    ImageProcessingDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: myfood-image-processing-dlq-${sls:stage}
+        MessageRetentionPeriod: 1209600
+
+    ImageProcessingQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: myfood-image-processing-${sls:stage}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
+          maxReceiveCount: 3
+
+    ImageProcessingQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref ImageProcessingQueue
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: s3.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt ImageProcessingQueue.Arn
+              Condition:
+                ArnLike:
+                  # O ARN do bucket é escrito à mão em vez de !GetAtt: o bucket já depende
+                  # desta policy, e referenciá-lo aqui fecharia um ciclo no CloudFormation.
+                  aws:SourceArn: arn:aws:s3:::myfood-media-${sls:stage}-${aws:accountId}
 
     OrderEventsDLQ:
       Type: AWS::SQS::Queue
@@ -113,3 +174,5 @@ resources:
       Value: !Ref MediaBucket
     OrderEventsQueueUrl:
       Value: !Ref OrderEventsQueue
+    ImageProcessingQueueUrl:
+      Value: !Ref ImageProcessingQueue

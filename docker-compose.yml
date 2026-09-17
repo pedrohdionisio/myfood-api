@@ -43,5 +43,26 @@ services:
       postgres:
         condition: service_healthy
 
+  # Mesma imagem da API: o que muda é o comando. O Sharp precisa dos binários linux/musl
+  # instalados dentro do container, não dos do host.
+  image-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: pnpm worker:images
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

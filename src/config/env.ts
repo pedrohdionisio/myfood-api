@@ -17,6 +17,11 @@ const envSchema = z.object({
   COGNITO_CUSTOMER_CLIENT_ID: z.string().min(1),
   COGNITO_RESTAURANT_POOL_ID: z.string().min(1),
   COGNITO_RESTAURANT_CLIENT_ID: z.string().min(1),
+  S3_BUCKET: z.string().min(1),
+  SQS_IMAGE_PROCESSING_URL: z.url(),
+
+  // A troca por um domínio de CDN é aqui: o resto do código só conhece esta base.
+  MEDIA_BASE_URL: z.url().optional(),
 
   // Opcionais: sem elas o SDK resolve pela cadeia padrão (~/.aws/credentials, IAM role).
   // No container não há ~/.aws, então lá elas precisam vir do .env.
@@ -31,6 +36,11 @@ if (!parsed.success) {
   process.exit(1)
 }
 
-export const env = parsed.data
+export const env = {
+  ...parsed.data,
+  MEDIA_BASE_URL:
+    parsed.data.MEDIA_BASE_URL ??
+    `https://${parsed.data.S3_BUCKET}.s3.${parsed.data.AWS_REGION}.amazonaws.com`
+}
 
 export type Env = typeof env

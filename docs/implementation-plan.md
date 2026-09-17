@@ -30,11 +30,13 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `docker-compose.yml`: Postgres 16 + PostGIS 3.5 + API container running `tsx watch`
 - [x] `serverless.yml` provisioning **AWS resources only**, all names carrying `${sls:stage}`:
   - [x] two Cognito User Pools (customers, restaurant users) + app clients
-  - [x] S3 bucket with CORS allowing browser `PUT` to presigned URLs
+  - [x] S3 bucket with CORS allowing browser `POST` to presigned uploads, a public-read policy on
+        `media/*` and an `ObjectCreated` notification on `originals/` (added in Phase 3)
   - [x] SQS queue for order events + dead-letter queue
-  - [ ] **deploy the `dev` stage and record the outputs in `.env`** — needs AWS credentials and a
-        Serverless Framework v4 login; run `pnpm dlx serverless deploy --stage dev`. Phase 2 is
-        blocked until this is done.
+  - [x] SQS queue for image processing + dead-letter queue (added in Phase 3)
+  - [x] **deploy the `dev` stage and record the outputs in `.env`** — `pnpm dlx serverless deploy
+        --stage dev`. Re-run it after any change to the bucket, the queues or the pools; the
+        outputs are the source of the ids in `.env`.
 - [x] `src/config/env.ts` — Zod-validated environment, failing at boot
 - [x] `src/app.ts` exporting `buildApp()`; `src/server.ts` calling `listen`. **No AWS assumption inside `buildApp()`.**
 - [x] Plugins: `fastify-type-provider-zod`, `@fastify/swagger` + UI, cors, helmet, rate-limit
@@ -161,7 +163,11 @@ No business logic. The goal is a repository where the next phase can be written 
       surfacing as a foreign-key violation
 - [x] `GET /cuisine-categories` — **pulled forward from Phase 5**: without the catalogue the owner
       has nowhere to get the ids from. Public, no token; the same route the customer app consumes
-- [ ] `POST /uploads/presign` → client uploads to S3 → `PATCH` stores `logo_key` / `banner_key`
+- [x] `POST /restaurants/:restaurantId/uploads/images` → client uploads to S3 → `PATCH` stores
+      `logoKey` / `bannerKey`. Presigned **POST**, not PUT: the policy carries the size and content
+      type as conditions, so the S3 refuses an oversized file instead of the API trusting a declared
+      length. The key stored is a prefix; the worker fills `media/{key}/{sm,md,lg}.webp` from the
+      S3 notification (architecture.md §6.1)
 - [ ] `PATCH /restaurants/:id/status` enforcing the activation checklist (D6), listing what is missing on rejection
 - [ ] `PATCH /restaurants/:id/accepting-orders`
 
@@ -256,7 +262,9 @@ One transaction:
 ## Phase 9 — Events and analytics
 
 - [ ] `EventPublisher` port with the SQS adapter
-- [ ] SQS consumer worker under `src/workers/`, started separately from `buildApp()`
+- [x] SQS consumer worker under `src/workers/`, started separately from `buildApp()` — built in
+      Phase 3 for image processing (`SqsQueueConsumer` + `image-processing.ts`); the order-events
+      consumer reuses the same poller
 - [ ] `processed_messages` written in the **same commit** as the aggregate (rule 6)
 - [ ] Upserts into `restaurant_daily_stats` and `product_daily_sales`, with the day resolved in `America/Sao_Paulo`
 - [ ] `GET /restaurants/:id/analytics?from&to` reading only from the aggregates, averages computed at read time

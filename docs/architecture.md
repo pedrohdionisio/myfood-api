@@ -48,7 +48,8 @@ Every external service sits behind a port. The real adapter runs in development 
 |---|---|---|
 | `ITokenVerifier` | Cognito (`aws-jwt-verify`), one instance per pool | In-memory signer |
 | `IEventPublisher` | SQS | In-memory buffer |
-| `IStorageGateway` | S3 presigned URLs | In-memory key map |
+| `IStorageGateway` | S3 presigned POST + get/put | In-memory key map |
+| `IImageProcessor` | Sharp | Identity buffer |
 
 Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. The SQS worker gets one separate test that runs against a real queue, outside the default `vitest run`.
 
@@ -80,9 +81,44 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 
 - Menu categories and products are ordered by `position`.
 - `is_available` marks temporarily sold-out items. `archived_at` removes items from the menu without breaking historical orders. Products are never hard-deleted.
-- Images are uploaded straight to S3 with presigned URLs; the database stores only the object key.
+- Images are uploaded straight to S3 and post-processed asynchronously (§6.1). The database stores only the object key.
 
-### 6.1 Add-ons readiness (not in MVP)
+### 6.1 Images
+
+The file never passes through the API. `POST /restaurants/:restaurantId/uploads/images` returns a
+**presigned POST**, the client sends the bytes straight to S3, and a worker turns the original into
+three WebP variants.
+
+**One key, one prefix.** The column (`logo_key`, `banner_key`, `image_key`) stores
+`restaurants/{restaurantId}/{logo|banner|products}/{uploadId}`, which is a prefix, not a file:
+
+| Object | Who writes it | Visibility |
+|---|---|---|
+| `originals/{key}` | the client, with the presigned POST | private |
+| `media/{key}/sm.webp` — 320px, q65 | the worker | public read |
+| `media/{key}/md.webp` — 720px, q75 | the worker | public read |
+| `media/{key}/lg.webp` — 1280px, q80 | the worker | public read |
+
+`sm` is the list in the customer app, `md` is the web grid, `lg` is the product detail page.
+Responses carry both the key and the three URLs, so no frontend hardcodes the bucket or the
+variant names. `MEDIA_BASE_URL` is the seam where a CDN domain replaces the S3 one.
+
+**What triggers the work.** The bucket notifies `s3:ObjectCreated:*` under `originals/` to an SQS
+queue, and the worker (`src/workers/image-processing.ts`) consumes it. The prefix filter is what
+keeps the worker from re-queueing itself: it reads `originals/` and writes `media/`.
+
+**The worker never touches the database.** It derives the variant keys from the original key, so
+the only thing that writes to a column is the `PATCH` the client sends after the upload — the same
+route that would set any other field. Reprocessing overwrites identical bytes, which is why this
+consumer needs no `processed_messages` row (rule 6 is about aggregates, which are not idempotent
+under replay).
+
+**Trust boundaries.** Size (5 MiB) and content type are conditions in the presigned policy, so the
+S3 refuses the file itself rather than trusting a declared length. On the way back, `PATCH`
+verifies that the key belongs to the restaurant in the path, otherwise an owner could point their
+logo at another restaurant's key.
+
+### 6.2 Add-ons readiness (not in MVP)
 
 Product add-ons (`option_groups`, `options`, `order_item_options`) are planned but not implemented. The tables are documented, commented out, in `myfood-schema.dbml`. Four decisions keep adding them later cheap:
 
@@ -246,6 +282,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D11 | Customers cancel only from `PENDING` (§7.1). |
 | D12 | Drivers do not self-assign `READY` orders (§7.1). |
 | D13 | No geolocation in the MVP. Delivery is city-based with a flat fee per restaurant (§9). |
+| D14 | Image variants are served from a public `media/` prefix, not presigned GETs: a menu listing would need one signature per product, and an expiring URL cannot be cached by a CDN (§6.1). |
 
 ## 14. Open questions
 

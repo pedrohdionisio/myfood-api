@@ -7,6 +7,7 @@ import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import {
   createRestaurantBodySchema,
   restaurantResponseSchema,
+  toRestaurantResponse,
   updateRestaurantBodySchema
 } from '@/schemas/restaurants.js'
 import type { App } from '../app.js'
@@ -20,6 +21,7 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
   const updateRestaurant = container.resolve<UpdateRestaurantUseCase>(
     TOKENS.UpdateRestaurantUseCase
   )
+  const mediaBaseUrl = container.resolve<string>(TOKENS.MediaBaseUrl)
 
   app.post(
     '/restaurants',
@@ -35,7 +37,9 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
     async (request, reply) => {
       const owner = requireRestaurantUser(request)
 
-      return reply.status(201).send(await createRestaurant.execute(owner.id, request.body))
+      const restaurant = await createRestaurant.execute(owner.id, request.body)
+
+      return reply.status(201).send(toRestaurantResponse(restaurant, mediaBaseUrl))
     }
   )
 
@@ -50,7 +54,8 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
       },
       preHandler: [app.authenticateRestaurantUser, app.requireMembership()]
     },
-    async (request) => getRestaurant.execute(request.params.restaurantId)
+    async (request) =>
+      toRestaurantResponse(await getRestaurant.execute(request.params.restaurantId), mediaBaseUrl)
   )
 
   app.patch(
@@ -65,6 +70,10 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
       },
       preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
     },
-    async (request) => updateRestaurant.execute(request.params.restaurantId, request.body)
+    async (request) =>
+      toRestaurantResponse(
+        await updateRestaurant.execute(request.params.restaurantId, request.body),
+        mediaBaseUrl
+      )
   )
 }

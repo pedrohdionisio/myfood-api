@@ -1,6 +1,9 @@
 import { z } from 'zod'
+import type { IRestaurant } from '@/application/interfaces/IRestaurantsRepository.js'
 import { isValidCnpj } from '@/domain/cnpj.js'
 import { RESTAURANT_STATUSES } from '@/domain/enums.js'
+import { buildImageUrls } from '@/domain/images.js'
+import { imageUrlsSchema } from './uploads.js'
 
 const editableFields = {
   legalName: z.string().min(2).max(160),
@@ -36,7 +39,11 @@ export const createRestaurantBodySchema = z.object({
 })
 
 export const updateRestaurantBodySchema = z
-  .object(editableFields)
+  .object({
+    ...editableFields,
+    logoKey: z.string().max(255).nullable(),
+    bannerKey: z.string().max(255).nullable()
+  })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Envie ao menos um campo para atualizar.')
 
@@ -51,6 +58,8 @@ export const restaurantResponseSchema = z.object({
   description: z.string().nullable(),
   logoKey: z.string().nullable(),
   bannerKey: z.string().nullable(),
+  logoUrls: imageUrlsSchema.nullable(),
+  bannerUrls: imageUrlsSchema.nullable(),
   zipCode: z.string(),
   street: z.string(),
   number: z.string(),
@@ -66,3 +75,14 @@ export const restaurantResponseSchema = z.object({
   ratingAvg: z.number(),
   ratingCount: z.int()
 })
+
+export function toRestaurantResponse(
+  restaurant: IRestaurant,
+  mediaBaseUrl: string
+): z.infer<typeof restaurantResponseSchema> {
+  return {
+    ...restaurant,
+    logoUrls: restaurant.logoKey ? buildImageUrls(mediaBaseUrl, restaurant.logoKey) : null,
+    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null
+  }
+}

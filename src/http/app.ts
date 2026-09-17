@@ -27,6 +27,7 @@ import { registerHealthRoutes } from './routes/health.js'
 import { registerMemberRoutes } from './routes/members.js'
 import { registerOpeningHoursRoutes } from './routes/opening-hours.js'
 import { registerRestaurantRoutes } from './routes/restaurants.js'
+import { registerUploadRoutes } from './routes/uploads.js'
 
 export type App = FastifyInstance<
   RawServerDefault,
@@ -94,6 +95,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerRestaurantRoutes(app, container)
   registerOpeningHoursRoutes(app, container)
   registerCuisineRoutes(app, container)
+  registerUploadRoutes(app, container)
 
   return app
 }

@@ -51,6 +51,8 @@ export interface ICreateRestaurantData {
 export interface IUpdateRestaurantData {
   legalName?: string | undefined
   tradeName?: string | undefined
+  logoKey?: string | null | undefined
+  bannerKey?: string | null | undefined
   phone?: string | undefined
   email?: string | undefined
   description?: string | undefined

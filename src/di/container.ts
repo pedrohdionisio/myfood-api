@@ -6,6 +6,7 @@ import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.j
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
+import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
@@ -27,6 +28,12 @@ import { ReorderMenuCategoriesUseCase } from '@/application/useCases/menuCategor
 import { UpdateMenuCategoryUseCase } from '@/application/useCases/menuCategories/UpdateMenuCategoryUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
+import { ArchiveProductUseCase } from '@/application/useCases/products/ArchiveProductUseCase.js'
+import { CreateProductUseCase } from '@/application/useCases/products/CreateProductUseCase.js'
+import { ListProductsUseCase } from '@/application/useCases/products/ListProductsUseCase.js'
+import { ReorderProductsUseCase } from '@/application/useCases/products/ReorderProductsUseCase.js'
+import { SetProductAvailabilityUseCase } from '@/application/useCases/products/SetProductAvailabilityUseCase.js'
+import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
@@ -45,6 +52,7 @@ import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomer
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
 import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMenuCategoriesRepository.js'
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
+import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
 import { TOKENS } from './tokens.js'
@@ -274,6 +282,48 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ReorderMenuCategoriesUseCase,
     { useClass: ReorderMenuCategoriesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IProductsRepository>(
+    TOKENS.ProductsRepository,
+    { useClass: DrizzleProductsRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListProductsUseCase,
+    { useClass: ListProductsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateProductUseCase,
+    { useClass: CreateProductUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateProductUseCase,
+    { useClass: UpdateProductUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.SetProductAvailabilityUseCase,
+    { useClass: SetProductAvailabilityUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ReorderProductsUseCase,
+    { useClass: ReorderProductsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ArchiveProductUseCase,
+    { useClass: ArchiveProductUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

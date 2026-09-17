@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 4 — Menu. Phases 0–3 are done.
+**Current phase:** Phase 5 — Discovery (customer). Phases 0–4 are done.
 
 ---
 
@@ -208,19 +208,47 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] Migration `0008` — unique parcial de nome, sem acento e sem caixa, em categorias e produtos
       (architecture.md §6). Faltava desde a Fase 1: nada impedia duas categorias "Bebidas" no mesmo
       menu, e o `.trim()` no schema fecha o caso do nome com espaço sobrando
-- [ ] `products` CRUD
-- [ ] `PATCH /reorder` — bulk position updates in one transaction
-- [ ] `PATCH /availability` for sold-out items
-- [ ] `DELETE` sets `archived_at`; nothing is ever hard-deleted
+- [x] `products` CRUD — `menuCategoryId` no corpo (não na rota), porque editar o produto e movê-lo
+      de categoria são a mesma operação para o dashboard. A categoria de destino precisa existir,
+      ser do restaurante e estar ativa: 404 e 422 respectivamente. Mover mantém a `position`
+      antiga, que pode empatar no destino até o próximo reorder
+- [x] `PATCH .../products/reorder` — bulk dentro de **uma** categoria, numa transação, exigindo a
+      lista completa dos ativos dela
+- [x] `PATCH .../products/:id/availability` for sold-out items — esgotado segue listado e segue
+      contando no reorder; quem some é o arquivado
+- [x] `DELETE` sets `archived_at`; nothing is ever hard-deleted. Sem restore e sem trava: ao
+      contrário da categoria, dá para arquivar um produto que vende. A confirmação fica no front
 
-**Done when:** an archived product disappears from the menu response while an existing order still shows its snapshot name and price.
+**Done when:** an archived product disappears from the menu response while an existing order still shows its snapshot name and price. ⚠️ **Metade provada.** O sumiço da listagem foi verificado; o snapshot no pedido antigo não dá para exercitar antes da Fase 6, que é quem cria `orders` e `order_items`. Reconferir lá.
+
+### Notes from Phase 4
+
+- **Sem restore em lugar nenhum** (decisão revista no meio da fase). Em categoria o caminho sem
+  volta é barato, porque arquivar já é recusado quando há produto ativo. Em produto não há trava,
+  e a confirmação foi delegada ao front de propósito.
+- **Nome único enquanto ativo** chegou como correção, não como plano: nada impedia duas categorias
+  "Bebidas" no mesmo menu. Migration `0008`, unique parcial sobre `immutable_unaccent(lower(name))`
+  — categorias por restaurante, produtos por categoria. Ver architecture.md §6.
+- **`max(position)` conta as arquivadas**, então a numeração tem buracos. Inofensivo: a ordenação é
+  relativa e o reorder reescreve como 0..n-1.
+- **Escopo é autorização.** Toda query de categoria e de produto filtra por `restaurant_id` junto
+  do id, então um recurso de outro restaurante responde 404 em vez de 403 — não confirma que
+  aquele id existe.
+- **Verified by hand:** criação com position sequencial; duplicata de nome em quatro grafias
+  (repetida, minúscula, com espaços, sem acento) → 409; mesmo nome em outra categoria → 201;
+  arquivar categoria com produto ativo → 422 com a contagem; arquivar produto → some da listagem
+  e libera o nome; produto em categoria arquivada → 422; `imageKey` de outro restaurante → 422;
+  reorder incompleto e com id estranho → 422 nomeando cada caso; esgotado seguindo exigido no
+  reorder; recurso de outro restaurante → 404; sem token → 401.
 
 ---
 
 ## Phase 5 — Discovery (customer)
 
 - [ ] `customer_addresses` CRUD, including the single-default rule
-- [ ] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed
+- [ ] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed.
+      **`isOpenAt` está listado na Fase 6.1 mas é necessário aqui** — construir nesta fase, sobre o
+      `validateOpeningHours` da Fase 3, e a 6.1 apenas consome
 - [ ] `GET /restaurants/:slug` and `GET /restaurants/:id/menu`
 - [ ] `GET /search` using `pg_trgm` + `immutable_unaccent`
 - [x] `GET /cuisine-categories` — built in Phase 3, alongside `restaurant_cuisines`

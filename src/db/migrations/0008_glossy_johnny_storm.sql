@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "menu_categories_unique_name" ON "menu_categories" USING btree ("restaurant_id",immutable_unaccent(lower("name"))) WHERE "menu_categories"."archived_at" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "products_unique_name_per_category" ON "products" USING btree ("menu_category_id",immutable_unaccent(lower("name"))) WHERE "products"."archived_at" is null;

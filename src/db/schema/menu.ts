@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar
 } from 'drizzle-orm/pg-core'
@@ -30,7 +31,11 @@ export const menuCategories = pgTable(
   },
   (table) => [
     index().on(table.restaurantId, table.position),
-    unique('menu_categories_id_restaurant_id').on(table.id, table.restaurantId)
+    unique('menu_categories_id_restaurant_id').on(table.id, table.restaurantId),
+    // Parcial: arquivar "Bebidas" e criar outra com o mesmo nome continua valendo.
+    uniqueIndex('menu_categories_unique_name')
+      .on(table.restaurantId, sql`immutable_unaccent(lower(${table.name}))`)
+      .where(sql`${table.archivedAt} is null`)
   ]
 )
 
@@ -59,6 +64,9 @@ export const products = pgTable(
       columns: [table.menuCategoryId, table.restaurantId],
       foreignColumns: [menuCategories.id, menuCategories.restaurantId]
     }),
-    check('products_price_non_negative', sql`${table.priceCents} >= 0`)
+    check('products_price_non_negative', sql`${table.priceCents} >= 0`),
+    uniqueIndex('products_unique_name_per_category')
+      .on(table.menuCategoryId, sql`immutable_unaccent(lower(${table.name}))`)
+      .where(sql`${table.archivedAt} is null`)
   ]
 )

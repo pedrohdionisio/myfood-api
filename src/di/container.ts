@@ -4,6 +4,7 @@ import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepo
 import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
 import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
+import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
@@ -19,6 +20,11 @@ import { ListRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/L
 import { ReplaceRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/ReplaceRestaurantCuisinesUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
+import { ArchiveMenuCategoryUseCase } from '@/application/useCases/menuCategories/ArchiveMenuCategoryUseCase.js'
+import { CreateMenuCategoryUseCase } from '@/application/useCases/menuCategories/CreateMenuCategoryUseCase.js'
+import { ListMenuCategoriesUseCase } from '@/application/useCases/menuCategories/ListMenuCategoriesUseCase.js'
+import { ReorderMenuCategoriesUseCase } from '@/application/useCases/menuCategories/ReorderMenuCategoriesUseCase.js'
+import { UpdateMenuCategoryUseCase } from '@/application/useCases/menuCategories/UpdateMenuCategoryUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
@@ -37,6 +43,7 @@ import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
+import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMenuCategoriesRepository.js'
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
@@ -231,6 +238,42 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ReplaceRestaurantCuisinesUseCase,
     { useClass: ReplaceRestaurantCuisinesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IMenuCategoriesRepository>(
+    TOKENS.MenuCategoriesRepository,
+    { useClass: DrizzleMenuCategoriesRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListMenuCategoriesUseCase,
+    { useClass: ListMenuCategoriesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateMenuCategoryUseCase,
+    { useClass: CreateMenuCategoryUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateMenuCategoryUseCase,
+    { useClass: UpdateMenuCategoryUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ArchiveMenuCategoryUseCase,
+    { useClass: ArchiveMenuCategoryUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ReorderMenuCategoriesUseCase,
+    { useClass: ReorderMenuCategoriesUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

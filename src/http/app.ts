@@ -25,6 +25,7 @@ import { registerCustomerAuthRoutes, registerRestaurantAuthRoutes } from './rout
 import { registerCuisineRoutes } from './routes/cuisines.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerMemberRoutes } from './routes/members.js'
+import { registerMenuCategoryRoutes } from './routes/menu-categories.js'
 import { registerOpeningHoursRoutes } from './routes/opening-hours.js'
 import { registerRestaurantRoutes } from './routes/restaurants.js'
 import { registerUploadRoutes } from './routes/uploads.js'
@@ -95,6 +96,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerRestaurantRoutes(app, container)
   registerOpeningHoursRoutes(app, container)
   registerCuisineRoutes(app, container)
+  registerMenuCategoryRoutes(app, container)
   registerUploadRoutes(app, container)
 
   return app

@@ -57,6 +57,13 @@
       "when": 1789589021938,
       "tag": "0007_cuisine_categories_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789606390215,
+      "tag": "0008_glossy_johnny_storm",
+      "breakpoints": true
     }
   ]
 }

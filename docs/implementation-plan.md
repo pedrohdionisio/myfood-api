@@ -199,7 +199,15 @@ No business logic. The goal is a repository where the next phase can be written 
 
 ## Phase 4 — Menu
 
-- [ ] `menu_categories` CRUD
+- [x] `menu_categories` CRUD — mais `PATCH .../reorder` e `DELETE` que grava `archived_at`.
+      Arquivar uma categoria com produtos ativos é recusado com 422 dizendo quantos são, em vez
+      de arquivar em cascata: o menu é agrupado por categoria, então o cascata esconderia
+      produtos que o dono não mandou esconder. **Não há rota de restore** (decidido, revertido e
+      decidido de novo): arquivar é sem volta pela API, o que só é seguro porque a recusa acima
+      garante que nenhum produto some junto. A listagem devolve apenas as ativas
+- [x] Migration `0008` — unique parcial de nome, sem acento e sem caixa, em categorias e produtos
+      (architecture.md §6). Faltava desde a Fase 1: nada impedia duas categorias "Bebidas" no mesmo
+      menu, e o `.trim()` no schema fecha o caso do nome com espaço sobrando
 - [ ] `products` CRUD
 - [ ] `PATCH /reorder` — bulk position updates in one transaction
 - [ ] `PATCH /availability` for sold-out items

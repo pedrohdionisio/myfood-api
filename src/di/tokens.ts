@@ -15,6 +15,7 @@ export const TOKENS = {
   RestaurantsRepository: Symbol('RestaurantsRepository'),
   OpeningHoursRepository: Symbol('OpeningHoursRepository'),
   CuisinesRepository: Symbol('CuisinesRepository'),
+  MenuCategoriesRepository: Symbol('MenuCategoriesRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
   SignInCustomerUseCase: Symbol('SignInCustomerUseCase'),
@@ -34,6 +35,11 @@ export const TOKENS = {
   ListCuisineCategoriesUseCase: Symbol('ListCuisineCategoriesUseCase'),
   ListRestaurantCuisinesUseCase: Symbol('ListRestaurantCuisinesUseCase'),
   ReplaceRestaurantCuisinesUseCase: Symbol('ReplaceRestaurantCuisinesUseCase'),
+  ListMenuCategoriesUseCase: Symbol('ListMenuCategoriesUseCase'),
+  CreateMenuCategoryUseCase: Symbol('CreateMenuCategoryUseCase'),
+  UpdateMenuCategoryUseCase: Symbol('UpdateMenuCategoryUseCase'),
+  ArchiveMenuCategoryUseCase: Symbol('ArchiveMenuCategoryUseCase'),
+  ReorderMenuCategoriesUseCase: Symbol('ReorderMenuCategoriesUseCase'),
   CreateImageUploadUseCase: Symbol('CreateImageUploadUseCase'),
   ProcessImageVariantsUseCase: Symbol('ProcessImageVariantsUseCase')
 } as const

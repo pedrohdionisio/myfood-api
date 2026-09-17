@@ -81,6 +81,11 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 ## 6. Menu
 
 - Menu categories and products are ordered by `position`.
+- **Names are unique while active**, accent- and case-insensitively: a partial unique index on
+  `(restaurant_id, immutable_unaccent(lower(name))) WHERE archived_at IS NULL` for categories, and
+  the same over `(menu_category_id, ...)` for products. "Açaí", "acai" and "AÇAÍ" collide, which is
+  how the customer reads the menu and matches the accent-insensitive search in §9. It is partial so
+  that archiving a category frees its name, and the API answers 409.
 - `is_available` marks temporarily sold-out items. `archived_at` removes items from the menu without breaking historical orders. Products are never hard-deleted.
 - Images are uploaded straight to S3 and post-processed asynchronously (§6.1). The database stores only the object key.
 

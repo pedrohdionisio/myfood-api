@@ -3,6 +3,8 @@ import { DomainError } from './errors.js'
 const MINUTES_IN_DAY = 1440
 const MINUTES_IN_WEEK = 10080
 
+const WEEKDAY_ABBREVIATIONS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 const WEEKDAY_NAMES = [
   'domingo',
   'segunda-feira',
@@ -51,6 +53,47 @@ function toWeeklyIntervals(shift: IShift): IWeeklyInterval[] {
     { shift, start, end: MINUTES_IN_WEEK },
     { shift, start: 0, end: end - MINUTES_IN_WEEK }
   ]
+}
+
+const weeklyMinuteFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function weeklyMinuteFormatter(timeZone: string): Intl.DateTimeFormat {
+  let formatter = weeklyMinuteFormatters.get(timeZone)
+
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    })
+    weeklyMinuteFormatters.set(timeZone, formatter)
+  }
+
+  return formatter
+}
+
+function toWeeklyMinute(date: Date, timeZone: string): number {
+  const parts = weeklyMinuteFormatter(timeZone).formatToParts(date)
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+
+  const dayOfWeek = WEEKDAY_ABBREVIATIONS.indexOf(read('weekday'))
+
+  if (dayOfWeek < 0) {
+    throw new Error(`Intl devolveu um dia da semana inesperado: ${read('weekday')}`)
+  }
+
+  return dayOfWeek * MINUTES_IN_DAY + Number(read('hour')) * 60 + Number(read('minute'))
+}
+
+export function isOpenAt(shifts: IShift[], date: Date, timeZone: string): boolean {
+  const minute = toWeeklyMinute(date, timeZone)
+
+  return shifts
+    .flatMap(toWeeklyIntervals)
+    .some((interval) => minute >= interval.start && minute < interval.end)
 }
 
 export function validateOpeningHours(shifts: IShift[]): void {

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { IRestaurant } from '@/application/interfaces/IRestaurantsRepository.js'
+import type { IDiscoveredRestaurant } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { isValidCnpj } from '@/domain/cnpj.js'
 import { RESTAURANT_STATUSES } from '@/domain/enums.js'
 import { buildImageUrls } from '@/domain/images.js'
@@ -85,6 +86,49 @@ export const restaurantResponseSchema = z.object({
   ratingAvg: z.number(),
   ratingCount: z.int()
 })
+
+export const listRestaurantsQuerySchema = z.object({
+  addressId: z.uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(50).default(20)
+})
+
+// Resumo de vitrine: sem CNPJ, razão social, contato ou o endereço completo do restaurante.
+export const restaurantSummaryResponseSchema = z.object({
+  id: z.uuid(),
+  slug: z.string(),
+  tradeName: z.string(),
+  description: z.string().nullable(),
+  logoUrls: imageUrlsSchema.nullable(),
+  bannerUrls: imageUrlsSchema.nullable(),
+  city: z.string(),
+  state: z.string(),
+  deliveryFeeCents: z.int(),
+  minOrderCents: z.int(),
+  avgPrepTimeMin: z.int(),
+  isAcceptingOrders: z.boolean(),
+  isOpenNow: z.boolean(),
+  ratingAvg: z.number(),
+  ratingCount: z.int()
+})
+
+export const listRestaurantsResponseSchema = z.object({
+  items: z.array(restaurantSummaryResponseSchema),
+  page: z.int(),
+  perPage: z.int(),
+  hasMore: z.boolean()
+})
+
+export function toRestaurantSummaryResponse(
+  restaurant: IDiscoveredRestaurant,
+  mediaBaseUrl: string
+): z.infer<typeof restaurantSummaryResponseSchema> {
+  return {
+    ...restaurant,
+    logoUrls: restaurant.logoKey ? buildImageUrls(mediaBaseUrl, restaurant.logoKey) : null,
+    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null
+  }
+}
 
 export function toRestaurantResponse(
   restaurant: IRestaurant,

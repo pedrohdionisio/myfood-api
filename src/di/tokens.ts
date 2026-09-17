@@ -29,6 +29,7 @@ export const TOKENS = {
   ListMyRestaurantsUseCase: Symbol('ListMyRestaurantsUseCase'),
   CreateRestaurantUseCase: Symbol('CreateRestaurantUseCase'),
   GetRestaurantUseCase: Symbol('GetRestaurantUseCase'),
+  ListRestaurantsUseCase: Symbol('ListRestaurantsUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ActivateRestaurantUseCase: Symbol('ActivateRestaurantUseCase'),
   SetAcceptingOrdersUseCase: Symbol('SetAcceptingOrdersUseCase'),

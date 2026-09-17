@@ -1,7 +1,8 @@
-import { and, eq, exists, isNull, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, isNull, like, or, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   ICreateRestaurantData,
+  IDiscoveryFilter,
   IRestaurant,
   IRestaurantsRepository,
   IUpdateRestaurantData
@@ -78,6 +79,24 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
     }
 
     return `${base}-${suffix}`
+  }
+
+  async listActiveByCity(filter: IDiscoveryFilter): Promise<IRestaurant[]> {
+    const { city, state, limit, offset } = filter
+
+    return this.database.db
+      .select(RESTAURANT_COLUMNS)
+      .from(restaurants)
+      .where(
+        and(
+          eq(restaurants.status, 'ACTIVE'),
+          eq(restaurants.state, state),
+          sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`
+        )
+      )
+      .orderBy(desc(restaurants.ratingAvg), asc(restaurants.tradeName), asc(restaurants.id))
+      .limit(limit)
+      .offset(offset)
   }
 
   async findById(id: string): Promise<IRestaurant | null> {

@@ -53,7 +53,13 @@ export const restaurants = pgTable(
   },
   (table) => [
     index().on(table.status),
-    index().on(table.city, table.status),
+    // A descoberta casa a cidade sem acento e sem caixa, porque o dono digita o endereço do
+    // restaurante à mão e o cliente recebe o dele da ViaCEP. Um índice sobre a coluna crua não
+    // serviria a essa consulta.
+    index('restaurants_city_status').on(
+      sql`immutable_unaccent(lower(${table.city}))`,
+      table.status
+    ),
     check('restaurants_delivery_fee_non_negative', sql`${table.deliveryFeeCents} >= 0`),
     check('restaurants_min_order_non_negative', sql`${table.minOrderCents} >= 0`),
     check('restaurants_rating_avg_range', sql`${table.ratingAvg} BETWEEN 0 AND 5`),

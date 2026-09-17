@@ -1,8 +1,9 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   IOpeningHour,
-  IOpeningHoursRepository
+  IOpeningHoursRepository,
+  IRestaurantShift
 } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import { openingHours } from '@/db/schema/index.js'
@@ -33,6 +34,28 @@ export class DrizzleOpeningHoursRepository implements IOpeningHoursRepository {
       .orderBy(asc(openingHours.dayOfWeek), asc(openingHours.opensAt))
 
     return rows.map(toOpeningHour)
+  }
+
+  async listByRestaurants(restaurantIds: string[]): Promise<IRestaurantShift[]> {
+    if (restaurantIds.length === 0) {
+      return []
+    }
+
+    const rows = await this.database.db
+      .select({
+        restaurantId: openingHours.restaurantId,
+        dayOfWeek: openingHours.dayOfWeek,
+        opensAt: openingHours.opensAt,
+        closesAt: openingHours.closesAt
+      })
+      .from(openingHours)
+      .where(inArray(openingHours.restaurantId, restaurantIds))
+
+    return rows.map((row) => ({
+      ...row,
+      opensAt: row.opensAt.slice(0, 5),
+      closesAt: row.closesAt.slice(0, 5)
+    }))
   }
 
   async replaceAll(restaurantId: string, shifts: IShift[]): Promise<IOpeningHour[]> {

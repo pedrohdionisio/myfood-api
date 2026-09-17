@@ -69,8 +69,17 @@ export interface IUpdateRestaurantData {
   avgPrepTimeMin?: number | undefined
 }
 
+export interface IDiscoveryFilter {
+  city: string
+  state: string
+  limit: number
+  offset: number
+}
+
 export interface IRestaurantsRepository {
   findAvailableSlug(base: string): Promise<string>
+
+  listActiveByCity(filter: IDiscoveryFilter): Promise<IRestaurant[]>
 
   findById(id: string): Promise<IRestaurant | null>
 

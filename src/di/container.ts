@@ -43,6 +43,7 @@ import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProd
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
+import { ListRestaurantsUseCase } from '@/application/useCases/restaurants/ListRestaurantsUseCase.js'
 import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
@@ -211,6 +212,12 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.GetRestaurantUseCase,
     { useClass: GetRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListRestaurantsUseCase,
+    { useClass: ListRestaurantsUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

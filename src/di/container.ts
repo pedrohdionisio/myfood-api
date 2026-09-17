@@ -11,6 +11,7 @@ import type { IOrdersRepository } from '@/application/interfaces/IOrdersReposito
 import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
+import type { IReviewsRepository } from '@/application/interfaces/IReviewsRepository.js'
 import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
@@ -31,6 +32,7 @@ import { FailDeliveryUseCase } from '@/application/useCases/deliveries/FailDeliv
 import { ListMyDeliveriesUseCase } from '@/application/useCases/deliveries/ListMyDeliveriesUseCase.js'
 import { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetPublicMenuUseCase.js'
 import { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
+import { ListPublicReviewsUseCase } from '@/application/useCases/discovery/ListPublicReviewsUseCase.js'
 import { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
 import { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
@@ -61,6 +63,10 @@ import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/Crea
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
 import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
+import { CreateReviewUseCase } from '@/application/useCases/reviews/CreateReviewUseCase.js'
+import { GetOrderReviewUseCase } from '@/application/useCases/reviews/GetOrderReviewUseCase.js'
+import { ListRestaurantReviewsUseCase } from '@/application/useCases/reviews/ListRestaurantReviewsUseCase.js'
+import { ReplyToReviewUseCase } from '@/application/useCases/reviews/ReplyToReviewUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
 import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
 import type { Env } from '@/config/env.js'
@@ -79,6 +85,7 @@ import { DrizzleOrdersRepository } from '@/infra/repositories/DrizzleOrdersRepos
 import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
+import { DrizzleReviewsRepository } from '@/infra/repositories/DrizzleReviewsRepository.js'
 import { TOKENS } from './tokens.js'
 
 export function buildContainer(env: Env): DependencyContainer {
@@ -480,6 +487,42 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.FailDeliveryUseCase,
     { useClass: FailDeliveryUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IReviewsRepository>(
+    TOKENS.ReviewsRepository,
+    { useClass: DrizzleReviewsRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateReviewUseCase,
+    { useClass: CreateReviewUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetOrderReviewUseCase,
+    { useClass: GetOrderReviewUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ReplyToReviewUseCase,
+    { useClass: ReplyToReviewUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListRestaurantReviewsUseCase,
+    { useClass: ListRestaurantReviewsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListPublicReviewsUseCase,
+    { useClass: ListPublicReviewsUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

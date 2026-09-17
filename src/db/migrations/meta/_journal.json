@@ -71,6 +71,13 @@
       "when": 1789652354556,
       "tag": "0009_tough_the_hand",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789670823419,
+      "tag": "0010_aberrant_blacklash",
+      "breakpoints": true
     }
   ]
 }

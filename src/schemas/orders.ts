@@ -119,6 +119,7 @@ export const customerOrderSummaryResponseSchema = z.object({
   totalCents: z.int(),
   createdAt: z.iso.datetime(),
   itemCount: z.int(),
+  hasReview: z.boolean(),
   restaurant: z.object({
     id: z.uuid(),
     slug: z.string(),
@@ -162,6 +163,7 @@ export function toCustomerOrderSummaryResponse(
     totalCents: summary.totalCents,
     createdAt: summary.createdAt,
     itemCount: summary.itemCount,
+    hasReview: summary.hasReview,
     restaurant: {
       id: summary.restaurantId,
       slug: summary.restaurantSlug,

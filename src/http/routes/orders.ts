@@ -3,6 +3,8 @@ import type { CancelOrderUseCase } from '@/application/useCases/orders/CancelOrd
 import type { CreateOrderUseCase } from '@/application/useCases/orders/CreateOrderUseCase.js'
 import type { GetCustomerOrderUseCase } from '@/application/useCases/orders/GetCustomerOrderUseCase.js'
 import type { ListCustomerOrdersUseCase } from '@/application/useCases/orders/ListCustomerOrdersUseCase.js'
+import type { CreateReviewUseCase } from '@/application/useCases/reviews/CreateReviewUseCase.js'
+import type { GetOrderReviewUseCase } from '@/application/useCases/reviews/GetOrderReviewUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import {
   createOrderBodySchema,
@@ -15,6 +17,11 @@ import {
   toCustomerOrderResponse,
   toCustomerOrderSummaryResponse
 } from '@/schemas/orders.js'
+import {
+  createReviewBodySchema,
+  reviewResponseSchema,
+  toReviewResponse
+} from '@/schemas/reviews.js'
 import type { App } from '../app.js'
 import { requireCustomer } from '../plugins/auth.js'
 
@@ -23,6 +30,8 @@ export function registerOrderRoutes(app: App, container: DependencyContainer): v
   const listOrders = container.resolve<ListCustomerOrdersUseCase>(TOKENS.ListCustomerOrdersUseCase)
   const getOrder = container.resolve<GetCustomerOrderUseCase>(TOKENS.GetCustomerOrderUseCase)
   const cancelOrder = container.resolve<CancelOrderUseCase>(TOKENS.CancelOrderUseCase)
+  const createReview = container.resolve<CreateReviewUseCase>(TOKENS.CreateReviewUseCase)
+  const getOrderReview = container.resolve<GetOrderReviewUseCase>(TOKENS.GetOrderReviewUseCase)
   const mediaBaseUrl = container.resolve<string>(TOKENS.MediaBaseUrl)
 
   app.post(
@@ -108,6 +117,46 @@ export function registerOrderRoutes(app: App, container: DependencyContainer): v
           orderId: request.params.orderId,
           reason: request.body.reason
         })
+      )
+  )
+
+  app.post(
+    '/orders/:orderId/review',
+    {
+      schema: {
+        tags: ['reviews'],
+        summary: 'Cliente avalia o pedido entregue, uma única vez',
+        params: orderScopeParamsSchema,
+        body: createReviewBodySchema,
+        response: { 201: reviewResponseSchema }
+      },
+      preHandler: [app.authenticateCustomer]
+    },
+    async (request, reply) => {
+      const review = await createReview.execute({
+        customerId: requireCustomer(request).id,
+        orderId: request.params.orderId,
+        ...request.body
+      })
+
+      return reply.status(201).send(toReviewResponse(review))
+    }
+  )
+
+  app.get(
+    '/orders/:orderId/review',
+    {
+      schema: {
+        tags: ['reviews'],
+        summary: 'Avaliação que o cliente deu a este pedido',
+        params: orderScopeParamsSchema,
+        response: { 200: reviewResponseSchema }
+      },
+      preHandler: [app.authenticateCustomer]
+    },
+    async (request) =>
+      toReviewResponse(
+        await getOrderReview.execute(requireCustomer(request).id, request.params.orderId)
       )
   )
 }

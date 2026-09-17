@@ -20,7 +20,7 @@ export const reviews = pgTable(
     id: primaryId(),
     orderId: uuid()
       .notNull()
-      .unique()
+      .unique('reviews_order_id_unique')
       .references(() => orders.id),
     customerId: uuid()
       .notNull()

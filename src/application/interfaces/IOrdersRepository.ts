@@ -90,6 +90,7 @@ export interface ICustomerOrderSummary {
   totalCents: number
   createdAt: string
   itemCount: number
+  hasReview: boolean
   restaurantId: string
   restaurantSlug: string
   restaurantTradeName: string

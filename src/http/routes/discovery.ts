@@ -1,6 +1,7 @@
 import type { DependencyContainer } from 'tsyringe'
 import type { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetPublicMenuUseCase.js'
 import type { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
+import type { ListPublicReviewsUseCase } from '@/application/useCases/discovery/ListPublicReviewsUseCase.js'
 import type { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
 import type { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
@@ -14,6 +15,11 @@ import {
   toPublicRestaurantResponse,
   toRestaurantSummaryResponse
 } from '@/schemas/restaurants.js'
+import {
+  publicReviewsResponseSchema,
+  reviewPageQuerySchema,
+  toPublicReviewResponse
+} from '@/schemas/reviews.js'
 import { searchQuerySchema, searchResponseSchema, toProductHitResponse } from '@/schemas/search.js'
 import type { App } from '../app.js'
 import { requireCustomer } from '../plugins/auth.js'
@@ -25,6 +31,9 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
   )
   const getPublicMenu = container.resolve<GetPublicMenuUseCase>(TOKENS.GetPublicMenuUseCase)
   const search = container.resolve<SearchUseCase>(TOKENS.SearchUseCase)
+  const listPublicReviews = container.resolve<ListPublicReviewsUseCase>(
+    TOKENS.ListPublicReviewsUseCase
+  )
   const mediaBaseUrl = container.resolve<string>(TOKENS.MediaBaseUrl)
 
   app.get(
@@ -114,5 +123,26 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
     },
     async (request) =>
       toPublicMenuResponse(await getPublicMenu.execute(request.params.restaurantId), mediaBaseUrl)
+  )
+
+  app.get(
+    '/discovery/restaurants/:slug/reviews',
+    {
+      schema: {
+        tags: ['discovery'],
+        summary: 'Avaliações públicas do restaurante, com a resposta do dono quando houver',
+        params: restaurantSlugParamsSchema,
+        querystring: reviewPageQuerySchema,
+        response: { 200: publicReviewsResponseSchema }
+      }
+    },
+    async (request) => {
+      const result = await listPublicReviews.execute({
+        slug: request.params.slug,
+        ...request.query
+      })
+
+      return { ...result, items: result.items.map(toPublicReviewResponse) }
+    }
   )
 }

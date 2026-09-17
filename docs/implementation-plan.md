@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 8 — Reviews. Phases 0–7 are done.
+**Current phase:** Phase 9 — Events and analytics. Phases 0–8 are done.
 
 ---
 
@@ -381,11 +381,42 @@ One transaction:
 
 ## Phase 8 — Reviews
 
-- [ ] `POST /orders/:id/review` — `DELIVERED` orders only, owner of the order only, one per order
-- [ ] `POST /reviews/:id/reply` for the restaurant owner
-- [ ] `rating_avg` / `rating_count` recomputed in the same transaction (D10)
+- [x] `POST /orders/:id/review` — `DELIVERED` orders only, owner of the order only, one per order
+- [x] `POST /restaurants/:restaurantId/reviews/:reviewId/reply` — o plano escrevia `/reviews/:id/reply`,
+      mas `requireMembership` resolve o vínculo a partir do `:restaurantId` do caminho, e a regra 5
+      exige que rota com escopo de restaurante o carregue
+- [x] `rating_avg` / `rating_count` recomputed in the same transaction (D10)
+- [x] Leitura, que o plano não listava e sem a qual a avaliação é dado morto:
+      `GET /orders/:orderId/review` (cliente), `GET /restaurants/:restaurantId/reviews` (dono, para
+      responder) e `GET /discovery/restaurants/:slug/reviews` (público, na página do restaurante)
+- [x] `hasReview` no resumo de `GET /orders` — é na lista que o botão "avaliar" aparece, e sem a
+      flag o app teria de abrir cada pedido para saber
 
-**Done when:** a second review on the same order is refused, and `rating_avg` matches `SELECT avg(rating) FROM reviews`.
+**Done when:** a second review on the same order is refused, and `rating_avg` matches `SELECT avg(rating) FROM reviews`. ✅
+
+### Notes from Phase 8
+
+- **A unique de `reviews.order_id` tinha nome camelCase.** O Drizzle nomeia a constraint pela
+  propriedade TS, não pela coluna, então saiu `reviews_orderId_unique` — e o
+  `violatesUniqueConstraint` procurava `reviews_order_id_unique`, o que fazia a segunda avaliação
+  do mesmo pedido responder 500 em vez de 409. Só apareceu porque o caso foi exercitado à mão.
+  Migration `0010` renomeia, e o schema agora passa o nome explícito. **Toda coluna com nome
+  composto e `.unique()` tem esse risco**; as anteriores (`slug`, `cnpj`, `email`) escaparam por
+  serem palavras únicas.
+- **A ausência de resposta vai no `WHERE` do reply.** Duas respostas simultâneas não se
+  sobrescrevem: a segunda recebe zero linhas e vira 409, em vez de substituir a primeira em
+  silêncio. Responder é uma vez só — relaxar isso é trocar o `isNull` por nada.
+- **O público vê só o primeiro nome** de quem avaliou. A rota é sem token, e nome completo numa
+  página aberta é mais do que a avaliação precisa. O dono vê o nome completo e o número do pedido.
+- **O restaurante vem do pedido, nunca do corpo.** A FK composta de `reviews` casa
+  `(order_id, customer_id, restaurant_id)` com o pedido, então divergir seria erro de banco.
+- **A faixa 1–5 é validada no Zod e no `CHECK`, não no use case.** Chamando o use case direto, nota
+  6 estoura como erro de banco; pela rota, o Zod devolve 422 antes de qualquer I/O.
+- **Verified by hand:** avaliar pedido `DELIVERY_FAILED` recusado; nota 6 e nota 0 → 422 pelo Zod;
+  nota 4 gravada e `rating_avg` indo de 0.00/0 para 4.00/1 no mesmo commit; segunda avaliação do
+  mesmo pedido → 409 (depois da migration `0010`); resposta do dono gravada; segunda resposta →
+  409; resposta por outro restaurante → 404; listagem do dono com nome completo e número do
+  pedido; listagem pública com "Pedro"; `hasReview` verdadeiro só no pedido avaliado.
 
 ---
 

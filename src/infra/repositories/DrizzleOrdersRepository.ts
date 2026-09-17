@@ -279,6 +279,9 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         itemCount: sql<number>`(
           select count(*) from order_items oi where oi.order_id = ${orders.id}
         )`.mapWith(Number),
+        hasReview: sql<boolean>`exists (
+          select 1 from reviews r where r.order_id = ${orders.id}
+        )`.mapWith(Boolean),
         restaurantId: restaurants.id,
         restaurantSlug: restaurants.slug,
         restaurantTradeName: restaurants.tradeName,

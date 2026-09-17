@@ -1,18 +1,25 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
+  IChangeOrderStatusData,
   ICreateOrderData,
+  ICustomerOrderSummary,
   IOrder,
   IOrderItem,
-  IOrdersRepository
+  IOrderPageFilter,
+  IOrdersRepository,
+  IRestaurantOrder,
+  IRestaurantOrderPageFilter
 } from '@/application/interfaces/IOrdersRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import {
+  customers,
   idempotencyKeys,
   orderItems,
   orderStatusHistory,
   orders,
-  restaurantOrderCounters
+  restaurantOrderCounters,
+  restaurants
 } from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError } from '@/domain/errors.js'
@@ -53,6 +60,8 @@ const ORDER_COLUMNS = {
   createdAt: orders.createdAt
 }
 
+const { deliveryCode: _withheldDeliveryCode, ...ORDER_COLUMNS_WITHOUT_CODE } = ORDER_COLUMNS
+
 const ORDER_ITEM_COLUMNS = {
   id: orderItems.id,
   productId: orderItems.productId,
@@ -75,22 +84,62 @@ type IOrderRow = Omit<
   createdAt: Date
 }
 
-function toOrder(row: IOrderRow, items: IOrderItem[]): IOrder {
+function toTimestamps(row: {
+  confirmedAt: Date | null
+  readyAt: Date | null
+  dispatchedAt: Date | null
+  deliveredAt: Date | null
+  finishedAt: Date | null
+  createdAt: Date
+}) {
   return {
-    ...row,
     confirmedAt: row.confirmedAt?.toISOString() ?? null,
     readyAt: row.readyAt?.toISOString() ?? null,
     dispatchedAt: row.dispatchedAt?.toISOString() ?? null,
     deliveredAt: row.deliveredAt?.toISOString() ?? null,
     finishedAt: row.finishedAt?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-    items
+    createdAt: row.createdAt.toISOString()
   }
+}
+
+function toOrder(row: IOrderRow, items: IOrderItem[]): IOrder {
+  return { ...row, ...toTimestamps(row), items }
 }
 
 @injectable()
 export class DrizzleOrdersRepository implements IOrdersRepository {
   constructor(@inject(TOKENS.Database) private readonly database: IDatabaseConnection) {}
+
+  private async selectItems(orderId: string): Promise<IOrderItem[]> {
+    return this.database.db
+      .select(ORDER_ITEM_COLUMNS)
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId))
+      .orderBy(asc(orderItems.id))
+  }
+
+  private async selectItemsForOrders(orderIds: string[]): Promise<Map<string, IOrderItem[]>> {
+    const grouped = new Map<string, IOrderItem[]>()
+
+    if (orderIds.length === 0) {
+      return grouped
+    }
+
+    const rows = await this.database.db
+      .select({ ...ORDER_ITEM_COLUMNS, orderId: orderItems.orderId })
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds))
+      .orderBy(asc(orderItems.id))
+
+    for (const { orderId, ...item } of rows) {
+      const list = grouped.get(orderId) ?? []
+
+      list.push(item)
+      grouped.set(orderId, list)
+    }
+
+    return grouped
+  }
 
   private async loadItems(tx: Transaction, orderId: string): Promise<IOrderItem[]> {
     return tx
@@ -195,6 +244,139 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         .where(eq(idempotencyKeys.key, idempotencyKey))
 
       return toOrder(created, await this.loadItems(tx, orderId))
+    })
+  }
+
+  async findByIdForCustomer(customerId: string, orderId: string): Promise<IOrder | null> {
+    const [row] = await this.database.db
+      .select(ORDER_COLUMNS)
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)))
+      .limit(1)
+
+    if (!row) {
+      return null
+    }
+
+    return toOrder(row, await this.selectItems(orderId))
+  }
+
+  async listByCustomer(
+    customerId: string,
+    filter: IOrderPageFilter
+  ): Promise<ICustomerOrderSummary[]> {
+    const rows = await this.database.db
+      .select({
+        id: orders.id,
+        displayNumber: orders.displayNumber,
+        status: orders.status,
+        totalCents: orders.totalCents,
+        createdAt: orders.createdAt,
+        itemCount: sql<number>`(
+          select count(*) from order_items oi where oi.order_id = ${orders.id}
+        )`.mapWith(Number),
+        restaurantId: restaurants.id,
+        restaurantSlug: restaurants.slug,
+        restaurantTradeName: restaurants.tradeName,
+        restaurantLogoKey: restaurants.logoKey
+      })
+      .from(orders)
+      .innerJoin(restaurants, eq(restaurants.id, orders.restaurantId))
+      .where(eq(orders.customerId, customerId))
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(filter.limit)
+      .offset(filter.offset)
+
+    return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }))
+  }
+
+  async findByIdForRestaurant(
+    restaurantId: string,
+    orderId: string
+  ): Promise<IRestaurantOrder | null> {
+    const [row] = await this.database.db
+      .select({
+        ...ORDER_COLUMNS_WITHOUT_CODE,
+        customerName: customers.name,
+        customerPhone: customers.phone
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(and(eq(orders.id, orderId), eq(orders.restaurantId, restaurantId)))
+      .limit(1)
+
+    if (!row) {
+      return null
+    }
+
+    return { ...row, ...toTimestamps(row), items: await this.selectItems(orderId) }
+  }
+
+  async listByRestaurant(
+    restaurantId: string,
+    filter: IRestaurantOrderPageFilter
+  ): Promise<IRestaurantOrder[]> {
+    const rows = await this.database.db
+      .select({
+        ...ORDER_COLUMNS_WITHOUT_CODE,
+        customerName: customers.name,
+        customerPhone: customers.phone
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(
+        and(
+          eq(orders.restaurantId, restaurantId),
+          filter.status ? eq(orders.status, filter.status) : undefined
+        )
+      )
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(filter.limit)
+      .offset(filter.offset)
+
+    const items = await this.selectItemsForOrders(rows.map((row) => row.id))
+
+    return rows.map((row) => ({
+      ...row,
+      ...toTimestamps(row),
+      items: items.get(row.id) ?? []
+    }))
+  }
+
+  // O status esperado entra no WHERE: entre a leitura que validou a transição e este UPDATE cabe
+  // outro ator mudando o pedido, e zero linhas afetadas é exatamente esse caso.
+  async changeStatus(data: IChangeOrderStatusData): Promise<boolean> {
+    const { orderId, from, to, actorType, actorId, reason, driverMemberId, timestampFields } = data
+
+    return this.database.db.transaction(async (tx) => {
+      const now = new Date()
+      const timestamps = Object.fromEntries(timestampFields.map((field) => [field, now]))
+
+      const updated = await tx
+        .update(orders)
+        .set({
+          status: to,
+          ...timestamps,
+          ...(driverMemberId ? { driverMemberId } : {}),
+          ...(reason ? { cancellationReason: reason } : {})
+        })
+        .where(and(eq(orders.id, orderId), eq(orders.status, from)))
+        .returning({ id: orders.id })
+
+      if (updated.length === 0) {
+        return false
+      }
+
+      await tx.insert(orderStatusHistory).values({
+        orderId,
+        fromStatus: from,
+        toStatus: to,
+        actorType,
+        actorId,
+        reason: reason ?? null
+      })
+
+      return true
     })
   }
 }

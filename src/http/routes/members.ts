@@ -1,12 +1,14 @@
 import type { DependencyContainer } from 'tsyringe'
 import type { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
+import type { ListMembersUseCase } from '@/application/useCases/members/ListMembersUseCase.js'
 import type { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import {
   createMemberBodySchema,
   memberResponseSchema,
-  myRestaurantsResponseSchema
+  myRestaurantsResponseSchema,
+  teamMembersResponseSchema
 } from '@/schemas/members.js'
 import type { App } from '../app.js'
 import { requireRestaurantUser } from '../plugins/auth.js'
@@ -16,6 +18,7 @@ export function registerMemberRoutes(app: App, container: DependencyContainer): 
   const listMyRestaurants = container.resolve<ListMyRestaurantsUseCase>(
     TOKENS.ListMyRestaurantsUseCase
   )
+  const listMembers = container.resolve<ListMembersUseCase>(TOKENS.ListMembersUseCase)
 
   app.get(
     '/restaurant-users/me/restaurants',
@@ -28,6 +31,20 @@ export function registerMemberRoutes(app: App, container: DependencyContainer): 
       preHandler: [app.authenticateRestaurantUser]
     },
     async (request) => listMyRestaurants.execute(requireRestaurantUser(request).id)
+  )
+
+  app.get(
+    '/restaurants/:restaurantId/members',
+    {
+      schema: {
+        tags: ['members'],
+        summary: 'Equipe do restaurante; é daqui que sai o driverMemberId do despacho',
+        params: restaurantScopeParamsSchema,
+        response: { 200: teamMembersResponseSchema }
+      },
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
+    },
+    async (request) => listMembers.execute(request.params.restaurantId)
   )
 
   app.post(

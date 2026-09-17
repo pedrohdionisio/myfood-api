@@ -32,3 +32,15 @@ export const myRestaurantsResponseSchema = z.array(
     restaurantStatus: z.enum(RESTAURANT_STATUSES)
   })
 )
+
+export const teamMembersResponseSchema = z.array(
+  z.object({
+    id: z.uuid(),
+    userId: z.uuid(),
+    name: z.string(),
+    email: z.string(),
+    phone: z.string().nullable(),
+    role: z.enum(MEMBER_ROLES),
+    active: z.boolean()
+  })
+)

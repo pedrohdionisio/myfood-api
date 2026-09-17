@@ -31,6 +31,7 @@ import { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/Get
 import { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
 import { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
+import { ListMembersUseCase } from '@/application/useCases/members/ListMembersUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { ArchiveMenuCategoryUseCase } from '@/application/useCases/menuCategories/ArchiveMenuCategoryUseCase.js'
 import { CreateMenuCategoryUseCase } from '@/application/useCases/menuCategories/CreateMenuCategoryUseCase.js'
@@ -39,7 +40,13 @@ import { ReorderMenuCategoriesUseCase } from '@/application/useCases/menuCategor
 import { UpdateMenuCategoryUseCase } from '@/application/useCases/menuCategories/UpdateMenuCategoryUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
+import { CancelOrderUseCase } from '@/application/useCases/orders/CancelOrderUseCase.js'
+import { ChangeOrderStatusUseCase } from '@/application/useCases/orders/ChangeOrderStatusUseCase.js'
 import { CreateOrderUseCase } from '@/application/useCases/orders/CreateOrderUseCase.js'
+import { DispatchOrderUseCase } from '@/application/useCases/orders/DispatchOrderUseCase.js'
+import { GetCustomerOrderUseCase } from '@/application/useCases/orders/GetCustomerOrderUseCase.js'
+import { ListCustomerOrdersUseCase } from '@/application/useCases/orders/ListCustomerOrdersUseCase.js'
+import { ListRestaurantOrdersUseCase } from '@/application/useCases/orders/ListRestaurantOrdersUseCase.js'
 import { ArchiveProductUseCase } from '@/application/useCases/products/ArchiveProductUseCase.js'
 import { CreateProductUseCase } from '@/application/useCases/products/CreateProductUseCase.js'
 import { ListProductsUseCase } from '@/application/useCases/products/ListProductsUseCase.js'
@@ -410,6 +417,48 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.CreateOrderUseCase,
     { useClass: CreateOrderUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListCustomerOrdersUseCase,
+    { useClass: ListCustomerOrdersUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetCustomerOrderUseCase,
+    { useClass: GetCustomerOrderUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CancelOrderUseCase,
+    { useClass: CancelOrderUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListRestaurantOrdersUseCase,
+    { useClass: ListRestaurantOrdersUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ChangeOrderStatusUseCase,
+    { useClass: ChangeOrderStatusUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.DispatchOrderUseCase,
+    { useClass: DispatchOrderUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListMembersUseCase,
+    { useClass: ListMembersUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

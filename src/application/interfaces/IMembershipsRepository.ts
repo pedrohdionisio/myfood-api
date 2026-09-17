@@ -33,8 +33,22 @@ export interface IMemberWithUser {
   user: IAuthenticatedRestaurantUser
 }
 
+export interface ITeamMember {
+  id: string
+  userId: string
+  name: string
+  email: string
+  phone: string | null
+  role: MemberRole
+  active: boolean
+}
+
 export interface IMembershipsRepository {
   findByUserAndRestaurant(userId: string, restaurantId: string): Promise<IMembership | null>
+
+  findById(restaurantId: string, id: string): Promise<IMembership | null>
+
+  listByRestaurant(restaurantId: string): Promise<ITeamMember[]>
 
   listByUser(userId: string): Promise<IRestaurantSummary[]>
 

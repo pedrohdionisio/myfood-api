@@ -1,11 +1,12 @@
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   ICreateMembershipData,
   IMembership,
   IMembershipsRepository,
   IMemberWithUser,
-  IRestaurantSummary
+  IRestaurantSummary,
+  ITeamMember
 } from '@/application/interfaces/IMembershipsRepository.js'
 import type { ICreateRestaurantUserData } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
@@ -39,6 +40,41 @@ export class DrizzleMembershipsRepository implements IMembershipsRepository {
       .limit(1)
 
     return row ?? null
+  }
+
+  async findById(restaurantId: string, id: string): Promise<IMembership | null> {
+    const [row] = await this.database.db
+      .select({
+        id: restaurantMembers.id,
+        restaurantId: restaurantMembers.restaurantId,
+        userId: restaurantMembers.userId,
+        role: restaurantMembers.role,
+        active: restaurantMembers.active,
+        restaurantStatus: restaurants.status
+      })
+      .from(restaurantMembers)
+      .innerJoin(restaurants, eq(restaurants.id, restaurantMembers.restaurantId))
+      .where(and(eq(restaurantMembers.id, id), eq(restaurantMembers.restaurantId, restaurantId)))
+      .limit(1)
+
+    return row ?? null
+  }
+
+  async listByRestaurant(restaurantId: string): Promise<ITeamMember[]> {
+    return this.database.db
+      .select({
+        id: restaurantMembers.id,
+        userId: restaurantMembers.userId,
+        name: restaurantUsers.name,
+        email: restaurantUsers.email,
+        phone: restaurantUsers.phone,
+        role: restaurantMembers.role,
+        active: restaurantMembers.active
+      })
+      .from(restaurantMembers)
+      .innerJoin(restaurantUsers, eq(restaurantUsers.id, restaurantMembers.userId))
+      .where(eq(restaurantMembers.restaurantId, restaurantId))
+      .orderBy(asc(restaurantUsers.name))
   }
 
   async listByUser(userId: string): Promise<IRestaurantSummary[]> {

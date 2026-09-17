@@ -10,6 +10,7 @@ export const TOKENS = {
   MediaBaseUrl: Symbol('MediaBaseUrl'),
 
   CustomersRepository: Symbol('CustomersRepository'),
+  CustomerAddressesRepository: Symbol('CustomerAddressesRepository'),
   RestaurantUsersRepository: Symbol('RestaurantUsersRepository'),
   MembershipsRepository: Symbol('MembershipsRepository'),
   RestaurantsRepository: Symbol('RestaurantsRepository'),
@@ -47,6 +48,11 @@ export const TOKENS = {
   SetProductAvailabilityUseCase: Symbol('SetProductAvailabilityUseCase'),
   ReorderProductsUseCase: Symbol('ReorderProductsUseCase'),
   ArchiveProductUseCase: Symbol('ArchiveProductUseCase'),
+  ListCustomerAddressesUseCase: Symbol('ListCustomerAddressesUseCase'),
+  CreateCustomerAddressUseCase: Symbol('CreateCustomerAddressUseCase'),
+  UpdateCustomerAddressUseCase: Symbol('UpdateCustomerAddressUseCase'),
+  SetDefaultCustomerAddressUseCase: Symbol('SetDefaultCustomerAddressUseCase'),
+  DeleteCustomerAddressUseCase: Symbol('DeleteCustomerAddressUseCase'),
   CreateImageUploadUseCase: Symbol('CreateImageUploadUseCase'),
   ProcessImageVariantsUseCase: Symbol('ProcessImageVariantsUseCase')
 } as const

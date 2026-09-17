@@ -1,6 +1,7 @@
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
 import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
+import type { ICustomerAddressesRepository } from '@/application/interfaces/ICustomerAddressesRepository.js'
 import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
 import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
@@ -19,6 +20,11 @@ import { SignUpRestaurantUserUseCase } from '@/application/useCases/auth/SignUpR
 import { ListCuisineCategoriesUseCase } from '@/application/useCases/cuisines/ListCuisineCategoriesUseCase.js'
 import { ListRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/ListRestaurantCuisinesUseCase.js'
 import { ReplaceRestaurantCuisinesUseCase } from '@/application/useCases/cuisines/ReplaceRestaurantCuisinesUseCase.js'
+import { CreateCustomerAddressUseCase } from '@/application/useCases/customerAddresses/CreateCustomerAddressUseCase.js'
+import { DeleteCustomerAddressUseCase } from '@/application/useCases/customerAddresses/DeleteCustomerAddressUseCase.js'
+import { ListCustomerAddressesUseCase } from '@/application/useCases/customerAddresses/ListCustomerAddressesUseCase.js'
+import { SetDefaultCustomerAddressUseCase } from '@/application/useCases/customerAddresses/SetDefaultCustomerAddressUseCase.js'
+import { UpdateCustomerAddressUseCase } from '@/application/useCases/customerAddresses/UpdateCustomerAddressUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
 import { ArchiveMenuCategoryUseCase } from '@/application/useCases/menuCategories/ArchiveMenuCategoryUseCase.js'
@@ -48,6 +54,7 @@ import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
 import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
 import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
+import { DrizzleCustomerAddressesRepository } from '@/infra/repositories/DrizzleCustomerAddressesRepository.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
 import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMembershipsRepository.js'
 import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMenuCategoriesRepository.js'
@@ -112,6 +119,12 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register<ICustomersRepository>(
     TOKENS.CustomersRepository,
     { useClass: DrizzleCustomersRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<ICustomerAddressesRepository>(
+    TOKENS.CustomerAddressesRepository,
+    { useClass: DrizzleCustomerAddressesRepository },
     { lifecycle: Lifecycle.Singleton }
   )
 
@@ -324,6 +337,36 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ArchiveProductUseCase,
     { useClass: ArchiveProductUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListCustomerAddressesUseCase,
+    { useClass: ListCustomerAddressesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreateCustomerAddressUseCase,
+    { useClass: CreateCustomerAddressUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateCustomerAddressUseCase,
+    { useClass: UpdateCustomerAddressUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.SetDefaultCustomerAddressUseCase,
+    { useClass: SetDefaultCustomerAddressUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.DeleteCustomerAddressUseCase,
+    { useClass: DeleteCustomerAddressUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

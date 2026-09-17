@@ -50,6 +50,8 @@ export interface IMembershipsRepository {
 
   listByRestaurant(restaurantId: string): Promise<ITeamMember[]>
 
+  listActiveByUser(userId: string): Promise<IMembership[]>
+
   listByUser(userId: string): Promise<IRestaurantSummary[]>
 
   create(data: ICreateMembershipData): Promise<IMembership>

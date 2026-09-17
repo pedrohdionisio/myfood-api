@@ -26,6 +26,9 @@ import { DeleteCustomerAddressUseCase } from '@/application/useCases/customerAdd
 import { ListCustomerAddressesUseCase } from '@/application/useCases/customerAddresses/ListCustomerAddressesUseCase.js'
 import { SetDefaultCustomerAddressUseCase } from '@/application/useCases/customerAddresses/SetDefaultCustomerAddressUseCase.js'
 import { UpdateCustomerAddressUseCase } from '@/application/useCases/customerAddresses/UpdateCustomerAddressUseCase.js'
+import { ConfirmDeliveryUseCase } from '@/application/useCases/deliveries/ConfirmDeliveryUseCase.js'
+import { FailDeliveryUseCase } from '@/application/useCases/deliveries/FailDeliveryUseCase.js'
+import { ListMyDeliveriesUseCase } from '@/application/useCases/deliveries/ListMyDeliveriesUseCase.js'
 import { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetPublicMenuUseCase.js'
 import { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
 import { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
@@ -459,6 +462,24 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ListMembersUseCase,
     { useClass: ListMembersUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ListMyDeliveriesUseCase,
+    { useClass: ListMyDeliveriesUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ConfirmDeliveryUseCase,
+    { useClass: ConfirmDeliveryUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.FailDeliveryUseCase,
+    { useClass: FailDeliveryUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

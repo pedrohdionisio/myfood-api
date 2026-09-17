@@ -1,9 +1,12 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   IChangeOrderStatusData,
+  IConfirmDeliveryData,
   ICreateOrderData,
   ICustomerOrderSummary,
+  IDriverAssignment,
+  IDriverDelivery,
   IOrder,
   IOrderItem,
   IOrderPageFilter,
@@ -14,6 +17,7 @@ import type {
 import type { IDatabaseConnection } from '@/db/client.js'
 import {
   customers,
+  deliveryConfirmationAttempts,
   idempotencyKeys,
   orderItems,
   orderStatusHistory,
@@ -377,6 +381,111 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       })
 
       return true
+    })
+  }
+
+  async listDeliveriesForMembers(memberIds: string[]): Promise<IDriverDelivery[]> {
+    if (memberIds.length === 0) {
+      return []
+    }
+
+    const rows = await this.database.db
+      .select({
+        id: orders.id,
+        displayNumber: orders.displayNumber,
+        status: orders.status,
+        restaurantId: restaurants.id,
+        restaurantTradeName: restaurants.tradeName,
+        customerName: customers.name,
+        customerPhone: customers.phone,
+        deliveryZipCode: orders.deliveryZipCode,
+        deliveryStreet: orders.deliveryStreet,
+        deliveryNumber: orders.deliveryNumber,
+        deliveryComplement: orders.deliveryComplement,
+        deliveryNeighborhood: orders.deliveryNeighborhood,
+        deliveryCity: orders.deliveryCity,
+        deliveryState: orders.deliveryState,
+        deliveryReference: orders.deliveryReference,
+        paymentMethod: orders.paymentMethod,
+        totalCents: orders.totalCents,
+        changeForCents: orders.changeForCents,
+        itemCount: sql<number>`(
+          select count(*) from order_items oi where oi.order_id = ${orders.id}
+        )`.mapWith(Number),
+        dispatchedAt: orders.dispatchedAt
+      })
+      .from(orders)
+      .innerJoin(restaurants, eq(restaurants.id, orders.restaurantId))
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(and(eq(orders.status, 'OUT_FOR_DELIVERY'), inArray(orders.driverMemberId, memberIds)))
+      .orderBy(asc(orders.dispatchedAt), asc(orders.id))
+
+    return rows.map((row) => ({
+      ...row,
+      dispatchedAt: row.dispatchedAt?.toISOString() ?? null
+    }))
+  }
+
+  async findDriverAssignment(orderId: string): Promise<IDriverAssignment | null> {
+    const [row] = await this.database.db
+      .select({ status: orders.status, driverMemberId: orders.driverMemberId })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1)
+
+    return row ?? null
+  }
+
+  async countRecentFailedConfirmations(orderId: string, since: Date): Promise<number> {
+    const [row] = await this.database.db
+      .select({ total: count() })
+      .from(deliveryConfirmationAttempts)
+      .where(
+        and(
+          eq(deliveryConfirmationAttempts.orderId, orderId),
+          eq(deliveryConfirmationAttempts.success, false),
+          gte(deliveryConfirmationAttempts.createdAt, since)
+        )
+      )
+
+    return row?.total ?? 0
+  }
+
+  async confirmDelivery(data: IConfirmDeliveryData): Promise<boolean> {
+    const { orderId, memberId, actorId, code } = data
+
+    return this.database.db.transaction(async (tx) => {
+      const now = new Date()
+
+      // Id, status e código no mesmo WHERE: zero linhas é código errado OU status inválido, sem
+      // distinguir os dois, e duas confirmações simultâneas deixam exatamente uma DELIVERED.
+      const updated = await tx
+        .update(orders)
+        .set({ status: 'DELIVERED', deliveredAt: now, finishedAt: now })
+        .where(
+          and(
+            eq(orders.id, orderId),
+            eq(orders.status, 'OUT_FOR_DELIVERY'),
+            eq(orders.deliveryCode, code)
+          )
+        )
+        .returning({ id: orders.id })
+
+      const success = updated.length > 0
+
+      await tx.insert(deliveryConfirmationAttempts).values({ orderId, memberId, success })
+
+      if (success) {
+        await tx.insert(orderStatusHistory).values({
+          orderId,
+          fromStatus: 'OUT_FOR_DELIVERY',
+          toStatus: 'DELIVERED',
+          actorType: 'RESTAURANT_USER',
+          actorId
+        })
+      }
+
+      return success
     })
   }
 }

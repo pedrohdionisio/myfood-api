@@ -24,6 +24,7 @@ import { registerSwagger } from './plugins/swagger.js'
 import { registerCustomerAuthRoutes, registerRestaurantAuthRoutes } from './routes/auth.js'
 import { registerCuisineRoutes } from './routes/cuisines.js'
 import { registerCustomerAddressRoutes } from './routes/customer-addresses.js'
+import { registerDeliveryRoutes } from './routes/deliveries.js'
 import { registerDiscoveryRoutes } from './routes/discovery.js'
 import { registerHealthRoutes } from './routes/health.js'
 import { registerMemberRoutes } from './routes/members.js'
@@ -107,6 +108,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerProductRoutes(app, container)
   registerOrderRoutes(app, container)
   registerRestaurantOrderRoutes(app, container)
+  registerDeliveryRoutes(app, container)
   registerUploadRoutes(app, container)
 
   return app

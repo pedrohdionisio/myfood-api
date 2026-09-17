@@ -77,6 +77,21 @@ export class DrizzleMembershipsRepository implements IMembershipsRepository {
       .orderBy(asc(restaurantUsers.name))
   }
 
+  async listActiveByUser(userId: string): Promise<IMembership[]> {
+    return this.database.db
+      .select({
+        id: restaurantMembers.id,
+        restaurantId: restaurantMembers.restaurantId,
+        userId: restaurantMembers.userId,
+        role: restaurantMembers.role,
+        active: restaurantMembers.active,
+        restaurantStatus: restaurants.status
+      })
+      .from(restaurantMembers)
+      .innerJoin(restaurants, eq(restaurants.id, restaurantMembers.restaurantId))
+      .where(and(eq(restaurantMembers.userId, userId), eq(restaurantMembers.active, true)))
+  }
+
   async listByUser(userId: string): Promise<IRestaurantSummary[]> {
     return this.database.db
       .select({

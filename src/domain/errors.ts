@@ -53,6 +53,11 @@ export class ConflictError extends AppError {
   readonly code = 'CONFLICT'
 }
 
+export class TooManyRequestsError extends AppError {
+  readonly statusCode = 429
+  readonly code = 'TOO_MANY_REQUESTS'
+}
+
 /** Regra de negócio violada. A mensagem técnica já é escrita para o usuário. */
 export class DomainError extends AppError {
   readonly statusCode = 422

@@ -105,6 +105,45 @@ export interface IRestaurantOrderPageFilter extends IOrderPageFilter {
   status?: OrderStatus | undefined
 }
 
+// O entregador nunca recebe deliveryCode: ele PEDE o código ao cliente na porta. Como no DTO do
+// restaurante, a coluna não entra no SELECT, então o campo não existe neste tipo (regra 1).
+export interface IDriverDelivery {
+  id: string
+  displayNumber: number
+  status: OrderStatus
+  restaurantId: string
+  restaurantTradeName: string
+  customerName: string
+  customerPhone: string | null
+  deliveryZipCode: string
+  deliveryStreet: string
+  deliveryNumber: string
+  deliveryComplement: string | null
+  deliveryNeighborhood: string
+  deliveryCity: string
+  deliveryState: string
+  deliveryReference: string | null
+  paymentMethod: PaymentMethod
+  totalCents: number | null
+  changeForCents: number | null
+  itemCount: number
+  dispatchedAt: string | null
+}
+
+export interface IDriverAssignment {
+  status: OrderStatus
+  driverMemberId: string | null
+}
+
+export interface IConfirmDeliveryData {
+  orderId: string
+  /** Vínculo do entregador: é o que delivery_confirmation_attempts referencia. */
+  memberId: string
+  /** Usuário do entregador: é o que order_status_history grava, como nas outras transições. */
+  actorId: string
+  code: string
+}
+
 export interface IChangeOrderStatusData {
   orderId: string
   from: OrderStatus
@@ -134,4 +173,17 @@ export interface IOrdersRepository {
 
   /** false quando o UPDATE condicional não casou: outro ator mudou o status nesse meio-tempo. */
   changeStatus(data: IChangeOrderStatusData): Promise<boolean>
+
+  listDeliveriesForMembers(memberIds: string[]): Promise<IDriverDelivery[]>
+
+  findDriverAssignment(orderId: string): Promise<IDriverAssignment | null>
+
+  countRecentFailedConfirmations(orderId: string, since: Date): Promise<number>
+
+  /**
+   * UPDATE condicional único casando id, status e código, com a tentativa gravada tanto no
+   * acerto quanto no erro — por isso devolve boolean em vez de lançar: lançar dentro da
+   * transação desfaria o registro da tentativa (regra 4).
+   */
+  confirmDelivery(data: IConfirmDeliveryData): Promise<boolean>
 }

@@ -28,7 +28,12 @@ const TRANSITIONS: ITransitionRoute[] = [
   { path: 'reject', to: 'REJECTED', summary: 'Dono recusa o pedido' },
   { path: 'preparing', to: 'PREPARING', summary: 'Dono põe o pedido em preparo' },
   { path: 'ready', to: 'READY', summary: 'Dono marca o pedido como pronto' },
-  { path: 'cancel', to: 'CANCELED', summary: 'Dono cancela o pedido' }
+  { path: 'cancel', to: 'CANCELED', summary: 'Dono cancela o pedido' },
+  {
+    path: 'delivery-failed',
+    to: 'DELIVERY_FAILED',
+    summary: 'Dono registra entrega frustrada, quando o entregador não consegue'
+  }
 ]
 
 export function registerRestaurantOrderRoutes(app: App, container: DependencyContainer): void {
@@ -60,8 +65,8 @@ export function registerRestaurantOrderRoutes(app: App, container: DependencyCon
     }
   )
 
-  // As cinco transições do dono diferem só no status de destino, então compartilham o use case,
-  // que é quem consulta a máquina de estados.
+  // As transições do dono diferem só no status de destino, então compartilham o use case, que é
+  // quem consulta a máquina de estados.
   for (const transition of TRANSITIONS) {
     app.post(
       `/restaurants/:restaurantId/orders/:orderId/${transition.path}`,

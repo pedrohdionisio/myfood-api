@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 5 — Discovery (customer). Phases 0–4 are done.
+**Current phase:** Phase 8 — Reviews. Phases 0–7 are done.
 
 ---
 
@@ -245,15 +245,38 @@ No business logic. The goal is a repository where the next phase can be written 
 
 ## Phase 5 — Discovery (customer)
 
-- [ ] `customer_addresses` CRUD, including the single-default rule
-- [ ] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed.
+- [x] `customer_addresses` CRUD, including the single-default rule
+- [x] `GET /restaurants` — filtered by the customer's city and `status = 'ACTIVE'`, with `is_open_now` computed.
       **`isOpenAt` está listado na Fase 6.1 mas é necessário aqui** — construir nesta fase, sobre o
       `validateOpeningHours` da Fase 3, e a 6.1 apenas consome
-- [ ] `GET /restaurants/:slug` and `GET /restaurants/:id/menu`
-- [ ] `GET /search` using `pg_trgm` + `immutable_unaccent`
+- [x] `GET /restaurants/:slug` and `GET /restaurants/:id/menu`
+- [x] `GET /search` using `pg_trgm` + `immutable_unaccent`
 - [x] `GET /cuisine-categories` — built in Phase 3, alongside `restaurant_cuisines`
 
-**Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded in another city does not come back.
+**Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded in another city does not come back. ✅
+
+### Notes from Phase 5
+
+- **Conflito de rota resolvido com prefixo `/discovery`.** `GET /restaurants/:restaurantId` (dono,
+  Fase 3) e `GET /restaurants/:slug` (público) são a mesma forma de caminho e o Fastify recusa o
+  registro. Toda a vitrine do cliente foi para `/discovery/restaurants`; o detalhe é por slug e o
+  cardápio por id, decisão tomada com o usuário.
+- **A cidade casa sem acento e sem caixa.** O dono digita o endereço à mão e o cliente recebe o
+  dele da ViaCEP, então `Sao Paulo` e `São Paulo` precisavam casar. Isso inutilizou o índice
+  `(city, status)` da Fase 1: a migration `0009` o troca por um funcional sobre
+  `immutable_unaccent(lower(city))`.
+- **Os índices trigrama da `0006` são sobre `immutable_unaccent(coluna)` sem `lower()`** — o
+  pg_trgm já rebaixa a caixa ao extrair trigramas. Escrever `lower()` na query troca o índice por
+  um seq scan sem erro nenhum. A expressão vive num único lugar, `trigram-search.ts`.
+- **`isOpenAt` nasceu aqui**, não na 6.1, porque `is_open_now` é da vitrine. Reaproveita o
+  `toWeeklyIntervals` do `validateOpeningHours`, então turno que atravessa a madrugada funciona de
+  graça.
+- **Fechado não vai para o fim da lista.** Ordenar por "aberto agora" exigiria calcular o horário
+  em SQL, duplicando a regra que vive no domínio. A ordenação é por nota e nome.
+- **Categoria vazia não aparece no cardápio público**; o dashboard continua enxergando ela.
+- **Verified by hand:** endereço com promoção do padrão ao apagar; `acai` achando "Açaí do Zé";
+  `margerita` achando "Margherita" por trigrama; `EXPLAIN` confirmando uso do índice GIN nos dois
+  ramos do `OR`; slug inexistente → 404; `is_open_now` falso numa quinta sem turno.
 
 ---
 
@@ -263,47 +286,96 @@ The core. Build the pure domain first — it is the part that will be tested har
 
 ### 6.1 Domain (no I/O)
 
-- [ ] `calculateLineTotal(product, options)` — the single pricing function (non-negotiable rule 7); ignores `options` for now
-- [ ] `isOpenAt(openingHours, date, tz)` — handles shifts crossing midnight
-- [ ] `resolveDeliveryFee(restaurant)` — flat fee today; the seam where distance-based pricing returns
-- [ ] `canTransition(from, to, actor)` + the status → timestamp map
-- [ ] `generateDeliveryCode()` using `crypto.randomInt`
+- [x] `calculateLineTotal(product, options)` — the single pricing function (non-negotiable rule 7); ignores `options` for now
+- [x] `isOpenAt(openingHours, date, tz)` — handles shifts crossing midnight
+- [x] `resolveDeliveryFee(restaurant)` — flat fee today; the seam where distance-based pricing returns
+- [x] `canTransition(from, to, actor)` + the status → timestamp map
+- [x] `generateDeliveryCode()` using `crypto.randomInt`
 
 ### 6.2 `POST /orders`
 
 One transaction:
 
-- [ ] reject `payment_method = 'ONLINE'` until a gateway exists (D1)
-- [ ] claim the `Idempotency-Key`; a replay returns the original order (D2)
-- [ ] load the restaurant; validate `ACTIVE`, `is_accepting_orders`, opening hours
-- [ ] load products by id; validate ownership, `archived_at IS NULL`, `is_available`
-- [ ] recompute the subtotal with `calculateLineTotal` — **client totals are ignored** (rule 2)
-- [ ] validate that the address city matches the restaurant city, resolve the fee, validate `min_order_cents`
-- [ ] draw `display_number` from `restaurant_order_counters` (D8) and generate `delivery_code`
-- [ ] snapshot the address into `delivery_*` and the items into `order_items`
-- [ ] insert `orders`, `order_items` and the first `order_status_history` row (`from_status` null)
+- [x] reject `payment_method = 'ONLINE'` until a gateway exists (D1)
+- [x] claim the `Idempotency-Key`; a replay returns the original order (D2)
+- [x] load the restaurant; validate `ACTIVE`, `is_accepting_orders`, opening hours
+- [x] load products by id; validate ownership, `archived_at IS NULL`, `is_available`
+- [x] recompute the subtotal with `calculateLineTotal` — **client totals are ignored** (rule 2)
+- [x] validate that the address city matches the restaurant city, resolve the fee, validate `min_order_cents`
+- [x] draw `display_number` from `restaurant_order_counters` (D8) and generate `delivery_code`
+- [x] snapshot the address into `delivery_*` and the items into `order_items`
+- [x] insert `orders`, `order_items` and the first `order_status_history` row (`from_status` null)
 - [ ] publish the order event
 
 ### 6.3 Routes
 
-- [ ] Customer: `GET /orders`, `GET /orders/:id` — **the only response schema in the codebase that declares `deliveryCode`** — and `POST /orders/:id/cancel` (allowed from `PENDING` only, D11)
-- [ ] Restaurant: `GET /restaurants/:id/orders` and `confirm` / `reject` / `preparing` / `ready` / `dispatch` / `cancel`, every one going through the state machine and writing `order_status_history` in the same transaction (rule 3), using DTOs **without** `deliveryCode`
+- [x] Customer: `GET /orders`, `GET /orders/:id` — **the only response schema in the codebase that declares `deliveryCode`** — and `POST /orders/:id/cancel` (allowed from `PENDING` only, D11)
+- [x] Restaurant: `GET /restaurants/:id/orders` and `confirm` / `reject` / `preparing` / `ready` / `dispatch` / `cancel`, every one going through the state machine and writing `order_status_history` in the same transaction (rule 3), using DTOs **without** `deliveryCode`
 
-**Done when:** `grep -ri "deliverycode" src/` shows the field in exactly one response schema (rule 1), and a hand-run script firing concurrent checkouts at one restaurant leaves no duplicate `display_number` — verify with `SELECT display_number, count(*) FROM orders GROUP BY 1 HAVING count(*) > 1`.
+**Done when:** `grep -ri "deliverycode" src/` shows the field in exactly one response schema (rule 1), and a hand-run script firing concurrent checkouts at one restaurant leaves no duplicate `display_number` — verify with `SELECT display_number, count(*) FROM orders GROUP BY 1 HAVING count(*) > 1`. ⚠️ **Metade provada.** O grep devolve exatamente uma declaração; a corrida de checkouts simultâneos não foi montada e fica para a Fase 12.
+
+### Notes from Phase 6
+
+- **O evento de pedido não foi publicado.** Não existe publisher de SQS no projeto, e a Fase 9 é
+  dona do `EventPublisher` e da decisão de como publicar sem dual-write com a transação. Um
+  adapter falso agora seria andaime.
+- **Regra 1 é mais forte do que o schema.** `IRestaurantOrder` é `Omit<IOrder, 'deliveryCode'>` e o
+  repositório não põe a coluna no `SELECT` das consultas do restaurante e do entregador. Declarar o
+  campo nesses DTOs passou a ser erro de compilação, não descuido que o Fastify salva.
+- **Checkout recusado não queima a `Idempotency-Key`.** A reivindicação acontece dentro da
+  transação, depois de toda validação, então o app corrige o carrinho e repete com a mesma chave.
+  Duas lacunas deixadas de propósito: o corpo não é conferido contra a chave (mesma chave com
+  carrinho diferente devolve o pedido original em silêncio) e a chave nunca expira.
+- **A máquina raciocina em papel, não em `ActorType`.** Dono e entregador são os dois
+  `RESTAURANT_USER`, mas despachar é do dono e confirmar entrega é do entregador;
+  `ACTOR_TYPE_BY_TRANSITION_ACTOR` traduz para o enum que a coluna aceita.
+- **`PREPARING` não tem timestamp próprio** — a tabela não tem `preparing_at`, então só o histórico
+  registra o momento. `timestampFieldsFor` devolve nomes de campo, e quem carimba a data é o
+  repositório.
+- **O status esperado vai no `WHERE` de toda transição.** Zero linhas afetadas viram 409 em vez de
+  sobrescrever uma mudança concorrente.
+- **`GET /restaurants/:id/members` entrou fora do plano:** sem ela o dashboard não tem de onde tirar
+  o `driverMemberId` do despacho.
+- **Verified by hand:** as oito recusas do checkout (fechado, mínimo, produto de outro
+  restaurante, troco menor que o total, pagamento online) e o replay da chave devolvendo o pedido
+  original; `display_number` 1 e 2 em sequência; itens com nome e preço congelados; o fluxo
+  `PENDING → CONFIRMED → PREPARING → READY → OUT_FOR_DELIVERY` com os carimbos e as seis linhas de
+  histórico; despacho recusado com o dono como entregador; cancelamento do cliente só em `PENDING`.
 
 ---
 
 ## Phase 7 — Delivery
 
-- [ ] `GET /me/deliveries` — only `OUT_FOR_DELIVERY` orders whose `driver_member_id` is the caller; money fields only for `CASH` (D9)
-- [ ] `POST /orders/:id/confirm-delivery`:
-  - [ ] count recent failures in `delivery_confirmation_attempts`; over the limit → 429
-  - [ ] one conditional `UPDATE ... WHERE id = $1 AND status = 'OUT_FOR_DELIVERY' AND delivery_code = $2 RETURNING id` (rule 4)
-  - [ ] record the attempt **whether it succeeded or not**
-  - [ ] on success: status history + event
-- [ ] `POST /orders/:id/delivery-failed` — no code required, so orders never get stuck in `OUT_FOR_DELIVERY`
+- [x] `GET /me/deliveries` — only `OUT_FOR_DELIVERY` orders whose `driver_member_id` is the caller; money fields only for `CASH` (D9)
+- [x] `POST /orders/:id/confirm-delivery`:
+  - [x] count recent failures in `delivery_confirmation_attempts`; over the limit → 429
+  - [x] one conditional `UPDATE ... WHERE id = $1 AND status = 'OUT_FOR_DELIVERY' AND delivery_code = $2 RETURNING id` (rule 4)
+  - [x] record the attempt **whether it succeeded or not**
+  - [x] on success: status history + event — o evento fica para a Fase 9, junto com o publisher
+- [x] `POST /orders/:id/delivery-failed` — no code required, so orders never get stuck in `OUT_FOR_DELIVERY`
+- [x] `POST /restaurants/:id/orders/:orderId/delivery-failed` — não estava na lista; a tabela do
+      architecture.md §7.1 dá a transição ao dono também, e sem ela o dono não destrava um pedido
+      quando o celular do entregador morre
 
-**Done when:** repeated wrong codes start returning 429 and every attempt shows up in `delivery_confirmation_attempts`; two confirmations fired together leave exactly one `DELIVERED` and one status-history row.
+**Done when:** repeated wrong codes start returning 429 and every attempt shows up in `delivery_confirmation_attempts`; two confirmations fired together leave exactly one `DELIVERED` and one status-history row. ⚠️ **Metade provada.** As tentativas e o 429 foram exercitados à mão (5 erradas → 429, e o código certo bloqueado depois disso); a corrida de duas confirmações simultâneas não foi montada e fica para a Fase 12. A garantia é estrutural: id, status e código no mesmo `WHERE`.
+
+### Notes from Phase 7
+
+- **Lançar erro dentro da transação apagaria a tentativa.** O registro em
+  `delivery_confirmation_attempts` tem de sobreviver ao erro, então `confirmDelivery` devolve
+  `boolean` e quem lança é o use case, fora da transação. Com um `throw` lá dentro, o rollback
+  levaria embora a prova da força bruta — que é justamente o que a regra 4 quer registrar.
+- **O vínculo não vem da rota.** Um entregador pode servir vários restaurantes, então
+  `confirm-delivery` não tem `restaurantId`: o `driver_member_id` do pedido é que decide, e ele
+  precisa estar entre os vínculos ativos do caller. `delivery_confirmation_attempts.member_id`
+  guarda o vínculo; `order_status_history.actor_id` guarda o usuário, como nas outras transições.
+- **Código errado e status inválido respondem igual** (422). Distinguir contaria ao entregador que
+  o código está certo mas o status mudou, o que vaza estado e não ajuda.
+- **Limite de 5 falhas em 15 minutos, por pedido e não por entregador**, em constantes do domínio.
+- **Verified by hand:** fila do entregador com as entregas atribuídas e sem `deliveryCode`; fila do
+  dono vazia; dono recusado com o código certo (403); código errado (422); código certo
+  (`DELIVERED`); confirmação repetida recusada; cinco erros → 429 e o código certo também
+  bloqueado; `delivery-failed` funcionando com o pedido bloqueado; `DELIVERY_FAILED` terminal.
 
 ---
 

@@ -21,6 +21,7 @@ import { registerErrorHandler } from './error-handler.js'
 import { registerAuth } from './plugins/auth.js'
 import { registerMembership } from './plugins/membership.js'
 import { registerSwagger } from './plugins/swagger.js'
+import { registerAnalyticsRoutes } from './routes/analytics.js'
 import { registerCustomerAuthRoutes, registerRestaurantAuthRoutes } from './routes/auth.js'
 import { registerCuisineRoutes } from './routes/cuisines.js'
 import { registerCustomerAddressRoutes } from './routes/customer-addresses.js'
@@ -111,6 +112,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerRestaurantOrderRoutes(app, container)
   registerDeliveryRoutes(app, container)
   registerRestaurantReviewRoutes(app, container)
+  registerAnalyticsRoutes(app, container)
   registerUploadRoutes(app, container)
 
   return app

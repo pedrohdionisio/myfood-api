@@ -1,4 +1,5 @@
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
+import type { IAnalyticsRepository } from '@/application/interfaces/IAnalyticsRepository.js'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
 import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
 import type { ICustomerAddressesRepository } from '@/application/interfaces/ICustomerAddressesRepository.js'
@@ -8,12 +9,15 @@ import type { IMembershipsRepository } from '@/application/interfaces/IMembershi
 import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
+import type { IOutboxRepository } from '@/application/interfaces/IOutboxRepository.js'
 import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { IReviewsRepository } from '@/application/interfaces/IReviewsRepository.js'
 import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
+import { GetAnalyticsUseCase } from '@/application/useCases/analytics/GetAnalyticsUseCase.js'
+import { ProcessOrderEventUseCase } from '@/application/useCases/analytics/ProcessOrderEventUseCase.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
 import { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCustomerUseCase.js'
 import { SignInRestaurantUserUseCase } from '@/application/useCases/auth/SignInRestaurantUserUseCase.js'
@@ -75,6 +79,7 @@ import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
 import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
 import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
+import { DrizzleAnalyticsRepository } from '@/infra/repositories/DrizzleAnalyticsRepository.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomerAddressesRepository } from '@/infra/repositories/DrizzleCustomerAddressesRepository.js'
 import { DrizzleCustomersRepository } from '@/infra/repositories/DrizzleCustomersRepository.js'
@@ -82,6 +87,7 @@ import { DrizzleMembershipsRepository } from '@/infra/repositories/DrizzleMember
 import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMenuCategoriesRepository.js'
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
 import { DrizzleOrdersRepository } from '@/infra/repositories/DrizzleOrdersRepository.js'
+import { DrizzleOutboxRepository } from '@/infra/repositories/DrizzleOutboxRepository.js'
 import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
@@ -523,6 +529,30 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ListPublicReviewsUseCase,
     { useClass: ListPublicReviewsUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IOutboxRepository>(
+    TOKENS.OutboxRepository,
+    { useClass: DrizzleOutboxRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IAnalyticsRepository>(
+    TOKENS.AnalyticsRepository,
+    { useClass: DrizzleAnalyticsRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ProcessOrderEventUseCase,
+    { useClass: ProcessOrderEventUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetAnalyticsUseCase,
+    { useClass: GetAnalyticsUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

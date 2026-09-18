@@ -20,6 +20,8 @@ export const TOKENS = {
   ProductsRepository: Symbol('ProductsRepository'),
   OrdersRepository: Symbol('OrdersRepository'),
   ReviewsRepository: Symbol('ReviewsRepository'),
+  OutboxRepository: Symbol('OutboxRepository'),
+  AnalyticsRepository: Symbol('AnalyticsRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
   SignInCustomerUseCase: Symbol('SignInCustomerUseCase'),
@@ -51,6 +53,8 @@ export const TOKENS = {
   ReplyToReviewUseCase: Symbol('ReplyToReviewUseCase'),
   ListRestaurantReviewsUseCase: Symbol('ListRestaurantReviewsUseCase'),
   ListPublicReviewsUseCase: Symbol('ListPublicReviewsUseCase'),
+  ProcessOrderEventUseCase: Symbol('ProcessOrderEventUseCase'),
+  GetAnalyticsUseCase: Symbol('GetAnalyticsUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ActivateRestaurantUseCase: Symbol('ActivateRestaurantUseCase'),
   SetAcceptingOrdersUseCase: Symbol('SetAcceptingOrdersUseCase'),

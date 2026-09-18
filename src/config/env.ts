@@ -19,6 +19,7 @@ const envSchema = z.object({
   COGNITO_RESTAURANT_CLIENT_ID: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   SQS_IMAGE_PROCESSING_URL: z.url(),
+  SQS_ORDER_EVENTS_URL: z.url(),
 
   // A troca por um domínio de CDN é aqui: o resto do código só conhece esta base.
   MEDIA_BASE_URL: z.url().optional(),

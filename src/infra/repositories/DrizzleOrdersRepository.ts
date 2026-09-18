@@ -22,10 +22,12 @@ import {
   orderItems,
   orderStatusHistory,
   orders,
+  outboxEvents,
   restaurantOrderCounters,
   restaurants
 } from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
+import type { OrderEventType } from '@/domain/enums.js'
 import { ConflictError } from '@/domain/errors.js'
 import { uuidv7 } from '@/shared/uuid.js'
 
@@ -108,6 +110,11 @@ function toTimestamps(row: {
 
 function toOrder(row: IOrderRow, items: IOrderItem[]): IOrder {
   return { ...row, ...toTimestamps(row), items }
+}
+
+// O evento entra no mesmo commit da mudança. Quem publica é o worker de outbox, depois.
+async function enqueueEvent(tx: Transaction, type: OrderEventType, orderId: string): Promise<void> {
+  await tx.insert(outboxEvents).values({ id: uuidv7(), type, orderId })
 }
 
 @injectable()
@@ -247,6 +254,8 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         .set({ orderId })
         .where(eq(idempotencyKeys.key, idempotencyKey))
 
+      await enqueueEvent(tx, 'ORDER_CREATED', orderId)
+
       return toOrder(created, await this.loadItems(tx, orderId))
     })
   }
@@ -383,6 +392,10 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         reason: reason ?? null
       })
 
+      if (to === 'CANCELED' || to === 'REJECTED') {
+        await enqueueEvent(tx, 'ORDER_CANCELED', orderId)
+      }
+
       return true
     })
   }
@@ -486,6 +499,8 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
           actorType: 'RESTAURANT_USER',
           actorId
         })
+
+        await enqueueEvent(tx, 'ORDER_DELIVERED', orderId)
       }
 
       return success

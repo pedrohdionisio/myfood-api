@@ -64,5 +64,46 @@ services:
       postgres:
         condition: service_healthy
 
+  # Drena outbox_events para o SQS. Sem ele o pedido é criado normalmente, mas nenhum
+  # agregado se move: o evento fica pendente na tabela até alguém publicar.
+  outbox-publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: pnpm worker:outbox
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Consome a fila e escreve os agregados. Idempotente por processed_messages.
+  order-events-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: pnpm worker:orders
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

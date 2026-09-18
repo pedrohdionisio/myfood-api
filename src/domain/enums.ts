@@ -29,3 +29,6 @@ export type ActorType = (typeof ACTOR_TYPES)[number]
 
 export const DEVICE_PLATFORMS = ['IOS', 'ANDROID'] as const
 export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number]
+
+export const ORDER_EVENT_TYPES = ['ORDER_CREATED', 'ORDER_DELIVERED', 'ORDER_CANCELED'] as const
+export type OrderEventType = (typeof ORDER_EVENT_TYPES)[number]

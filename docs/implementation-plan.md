@@ -28,12 +28,15 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] Lint and format (Biome) exposed as `pnpm lint`
 - [x] `pnpm typecheck` running `tsc --noEmit`
 - [x] `docker-compose.yml`: Postgres 16 + PostGIS 3.5 + API container running `tsx watch`
-- [x] `serverless.yml` provisioning **AWS resources only**, all names carrying `${sls:stage}`:
+- [x] `serverless.yml` provisioning **pay-per-use AWS resources only**, all names carrying
+      `${sls:stage}`:
   - [x] two Cognito User Pools (customers, restaurant users) + app clients
   - [x] S3 bucket with CORS allowing browser `POST` to presigned uploads, a public-read policy on
         `media/*` and an `ObjectCreated` notification on `originals/` (added in Phase 3)
   - [x] SQS queue for order events + dead-letter queue
   - [x] SQS queue for image processing + dead-letter queue (added in Phase 3)
+  - [x] the `processImage` Lambda and its `sharp` layer (added in Phase 9) — `pnpm deploy` builds
+        the layer before deploying, so `sls deploy` alone ships a stale one
   - [x] **deploy the `dev` stage and record the outputs in `.env`** — `pnpm dlx serverless deploy
         --stage dev`. Re-run it after any change to the bucket, the queues or the pools; the
         outputs are the source of the ids in `.env`.
@@ -166,7 +169,7 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `POST /restaurants/:restaurantId/uploads/images` → client uploads to S3 → `PATCH` stores
       `logoKey` / `bannerKey`. Presigned **POST**, not PUT: the policy carries the size and content
       type as conditions, so the S3 refuses an oversized file instead of the API trusting a declared
-      length. The key stored is a prefix; the worker fills `media/{key}/{sm,md,lg}.webp` from the
+      length. The key stored is a prefix; a Lambda fills `media/{key}/{sm,md,lg}.webp` from the
       S3 notification (architecture.md §6.1)
 - [x] `PATCH /restaurants/:restaurantId/status` enforcing the activation checklist (D6), listing
       what is missing on rejection. The body only accepts `ACTIVE`; the checklist dropped the
@@ -188,8 +191,9 @@ No business logic. The goal is a repository where the next phase can be written 
   subquery compared two columns of `opening_hours` and was silently always false — no error, just a
   wrong answer. The checklist uses the query builder's `exists()`, which qualifies. Worth
   remembering for the analytics queries in Phase 9.
-- **Images:** presigned POST, three WebP variants produced by an SQS worker, keys stored as
-  prefixes. See architecture.md §6.1 and the Phase 0 / Phase 9 entries this touched.
+- **Images:** presigned POST, three WebP variants produced by an SQS consumer, keys stored as
+  prefixes. Built as a worker container here and moved to a Lambda during Phase 9 — see
+  architecture.md §6.1 and the Phase 0 / Phase 9 entries this touched.
 - **Verified by hand:** activation refused with `missing: ["AVAILABLE_PRODUCT"]` and accepted once
   a product existed; `SUSPENDED` refused by the body schema (422); a restaurant the caller is not a
   member of (403); no token (401); the store pause toggling; and the full image flow for a logo and
@@ -423,9 +427,10 @@ One transaction:
 ## Phase 9 — Events and analytics
 
 - [ ] `EventPublisher` port with the SQS adapter
-- [x] SQS consumer worker under `src/workers/`, started separately from `buildApp()` — built in
-      Phase 3 for image processing (`SqsQueueConsumer` + `image-processing.ts`); the order-events
-      consumer reuses the same poller
+- [x] SQS consumer worker under `src/workers/`, started separately from `buildApp()` —
+      `SqsQueueConsumer` + `order-events.ts`. The image consumer that first introduced the poller
+      in Phase 3 is now a Lambda (`src/lambda/process-image.ts`); the poller stays for the two
+      consumers that need Postgres
 - [ ] `processed_messages` written in the **same commit** as the aggregate (rule 6)
 - [ ] Upserts into `restaurant_daily_stats` and `product_daily_sales`, with the day resolved in `America/Sao_Paulo`
 - [ ] `GET /restaurants/:id/analytics?from&to` reading only from the aggregates, averages computed at read time

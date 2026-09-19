@@ -11,7 +11,8 @@
     "dev": "tsx watch src/server.ts",
     "worker:orders": "tsx watch src/workers/order-events.ts",
     "worker:outbox": "tsx watch src/workers/outbox-publisher.ts",
-    "worker:images": "tsx watch src/workers/image-processing.ts",
+    "layer:sharp": "./scripts/build-layers.sh",
+    "deploy": "pnpm layer:sharp && pnpm dlx serverless deploy",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@types/aws-lambda": "^8.10.163",
     "@types/node": "24.10.1",
     "drizzle-kit": "0.31.10",
     "openapi-types": "12.1.3",

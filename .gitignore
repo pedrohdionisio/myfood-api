@@ -6,3 +6,4 @@ dist/
 .serverless/
 *.log
 .DS_Store
+layers/

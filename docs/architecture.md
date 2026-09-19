@@ -17,13 +17,18 @@ MyFood uses three separate repositories (no monorepo). The contract between them
 ## 3. Infrastructure
 
 - **Local-first:** the API and Postgres run in Docker. There is no deployed environment yet.
-- **AWS, pay-per-use only:** Cognito, S3, SQS and SES, provisioned with Serverless Framework.
+- **AWS, pay-per-use only:** Cognito, S3, SQS, SES and Lambda, provisioned with Serverless Framework.
 - **Real AWS in development.** These services are pay-per-use and effectively free at this volume, so local development runs against real resources instead of emulators (LocalStack, ElasticMQ, cognito-local). Emulators would only prove the code works against the emulator.
 - **Resources are per stage.** Every resource name carries `${sls:stage}`, so two developers never share a queue or a user pool.
 - **Deployment-agnostic code:**
   - A shared `buildApp()` creates the Fastify instance.
   - `server.ts` listens locally; a Lambda entry point can be added later with `@fastify/aws-lambda`.
   - The database uses `postgres.js` through `DATABASE_URL`, so the same code works against local Postgres or a hosted serverless Postgres (e.g. Neon pooled connection) if the API is deployed later.
+- **Asynchronous work is split by what it touches.** Image processing is a Lambda (§6.1) because it
+  never reads the database. The order-events consumer and the outbox publisher stay as containers
+  under `src/workers/`: both need Postgres, and Postgres is still local-only. Moving them is a
+  decision about where the database lives, not about the code — the message handling already sits
+  in use cases, so an entry point under `src/lambda/` is all each would need.
 
 ### 3.1 Layers
 
@@ -92,7 +97,7 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 ### 6.1 Images
 
 The file never passes through the API. `POST /restaurants/:restaurantId/uploads/images` returns a
-**presigned POST**, the client sends the bytes straight to S3, and a worker turns the original into
+**presigned POST**, the client sends the bytes straight to S3, and a Lambda turns the original into
 three WebP variants.
 
 **One key, one prefix.** The column (`logo_key`, `banner_key`, `image_key`) stores
@@ -101,19 +106,32 @@ three WebP variants.
 | Object | Who writes it | Visibility |
 |---|---|---|
 | `originals/{key}` | the client, with the presigned POST | private |
-| `media/{key}/sm.webp` — 320px, q65 | the worker | public read |
-| `media/{key}/md.webp` — 720px, q75 | the worker | public read |
-| `media/{key}/lg.webp` — 1280px, q80 | the worker | public read |
+| `media/{key}/sm.webp` — 320px, q65 | the Lambda | public read |
+| `media/{key}/md.webp` — 720px, q75 | the Lambda | public read |
+| `media/{key}/lg.webp` — 1280px, q80 | the Lambda | public read |
 
 `sm` is the list in the customer app, `md` is the web grid, `lg` is the product detail page.
 Responses carry both the key and the three URLs, so no frontend hardcodes the bucket or the
 variant names. `MEDIA_BASE_URL` is the seam where a CDN domain replaces the S3 one.
 
 **What triggers the work.** The bucket notifies `s3:ObjectCreated:*` under `originals/` to an SQS
-queue, and the worker (`src/workers/image-processing.ts`) consumes it. The prefix filter is what
-keeps the worker from re-queueing itself: it reads `originals/` and writes `media/`.
+queue, and a Lambda (`src/lambda/process-image.ts`) consumes it through an event source mapping.
+The prefix filter is what keeps it from re-queueing itself: it reads `originals/` and writes
+`media/`.
 
-**The worker never touches the database.** It derives the variant keys from the original key, so
+**Why this one is a Lambda and the other consumers are not.** It is the only asynchronous path that
+never touches the database, so it is the only one that can run in AWS while Postgres is still a
+local container. `sharp` ships native binaries, which is why the function carries a layer built by
+`scripts/build-layers.sh` (linux/arm64/glibc) instead of bundling the package. The order-events and
+outbox consumers stay as containers under `src/workers/` until there is a Postgres that AWS can
+reach.
+
+**Failures are per message, not per batch.** The event source mapping is declared with
+`functionResponseType: ReportBatchItemFailures`, and the handler returns the ids it could not
+process. Without it one corrupt image would send the other nine in the batch back to the queue and,
+after `maxReceiveCount`, to the DLQ.
+
+**The function never touches the database.** It derives the variant keys from the original key, so
 the only thing that writes to a column is the `PATCH` the client sends after the upload — the same
 route that would set any other field. Reprocessing overwrites identical bytes, which is why this
 consumer needs no `processed_messages` row (rule 6 is about aggregates, which are not idempotent

@@ -20,7 +20,7 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 - Drizzle ORM with the `postgres.js` driver
 - PostgreSQL (`pg_trgm` and `unaccent` extensions)
 - Docker / docker-compose for local development
-- AWS via Serverless Framework: Cognito, S3, SQS only
+- AWS via Serverless Framework: Cognito, S3, SQS and Lambda only
 - Pino for logging
 
 ## Runtime model
@@ -28,7 +28,9 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 - The API runs locally in a Docker container. There is no deployed environment yet.
 - Keep the API deployment-agnostic: `buildApp()` builds the Fastify instance; `server.ts` calls `listen`, and a future `lambda.ts` may wrap it. Never put AWS runtime assumptions inside `buildApp()`.
 - The database is only reached through `DATABASE_URL`. Do not use Neon-specific drivers.
-- Serverless Framework provisions AWS resources only (Cognito, S3, SQS). Do not provision RDS, ECS, NAT Gateways or any always-on infrastructure.
+- Serverless Framework provisions pay-per-use resources (Cognito, S3, SQS) and the Lambdas under `src/lambda/`. Do not provision RDS, ECS, NAT Gateways or any always-on infrastructure.
+- **Only asynchronous work that never touches Postgres may become a Lambda** while the database is a local container. Today that is image processing alone; the consumers under `src/workers/` stay as containers. A Lambda entry point is a thin shell over a use case — it must not build the DI container or import `config/env.ts`, both of which require `DATABASE_URL`.
+- `sharp` runs from a Lambda layer built by `scripts/build-layers.sh` (linux/arm64/glibc). Deploy with `pnpm deploy`, never `sls deploy` alone, or the layer goes up stale.
 
 ## Workflow
 

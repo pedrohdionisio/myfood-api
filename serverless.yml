@@ -4,8 +4,67 @@ frameworkVersion: '4'
 
 provider:
   name: aws
+  runtime: nodejs24.x
+  architecture: arm64
   region: ${opt:region, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: s3:GetObject
+          Resource: !Sub '${MediaBucket.Arn}/originals/*'
+        - Effect: Allow
+          Action: s3:PutObject
+          Resource: !Sub '${MediaBucket.Arn}/media/*'
+
+package:
+  individually: true
+
+build:
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap:
+      type: linked
+      setNodeOptions: true
+    exclude:
+      # Vem da layer, não do bundle.
+      - sharp
+      # O padrão do framework é excluir todo @aws-sdk/* e usar o que vem no runtime, cuja
+      # versão quem escolhe é a AWS. Embutir o client-s3 prende a versão ao package.json.
+      - '@aws-sdk/*'
+      - '!@aws-sdk/client-s3'
+
+layers:
+  sharp:
+    name: myfood-sharp-${sls:stage}
+    description: sharp and its linux/arm64 binaries
+    path: layers/sharp
+    retain: false
+    compatibleArchitectures:
+      - arm64
+    compatibleRuntimes:
+      - nodejs24.x
+
+functions:
+  processImage:
+    handler: src/lambda/process-image.handler
+    # Precisa ser menor que o VisibilityTimeout da fila (120s), senão a mensagem reaparece
+    # enquanto ainda está sendo processada e a imagem é convertida duas vezes.
+    timeout: 60
+    memorySize: 1024
+    layers:
+      - !Ref SharpLambdaLayer
+    environment:
+      S3_BUCKET: !Ref MediaBucket
+      LOG_LEVEL: info
+    events:
+      - sqs:
+          arn: !GetAtt ImageProcessingQueue.Arn
+          batchSize: 10
+          # Sem isto, uma imagem corrompida no lote devolve as outras nove para a fila junto.
+          functionResponseType: ReportBatchItemFailures
 
 resources:
   Resources:

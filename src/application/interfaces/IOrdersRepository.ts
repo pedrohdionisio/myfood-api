@@ -58,6 +58,7 @@ export interface ICreateOrderData {
   idempotencyKey: string
   customerId: string
   restaurantId: string
+  status: OrderStatus
   paymentMethod: PaymentMethod
   changeForCents?: number | undefined
   subtotalCents: number

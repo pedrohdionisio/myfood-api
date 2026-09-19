@@ -53,6 +53,18 @@ Enum payment_status {
   REFUNDED
 }
 
+// Estado da cobrança no gateway. Mais fino que payment_status: REFUND_PENDING é o estorno
+// pedido dentro da transação do cancelamento e executado depois, pelo worker.
+Enum payment_charge_status {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELED
+  REFUND_PENDING
+  REFUNDED
+  FAILED
+}
+
 Enum actor_type {
   CUSTOMER
   RESTAURANT_USER
@@ -443,6 +455,40 @@ Table processed_messages {
   message_id varchar(128) [pk, note: 'Idempotência dos consumers SQS']
   consumer varchar(60) [not null]
   processed_at timestamptz [not null, default: `now()`]
+}
+
+// ---------------------------------------------------------------------
+// PAGAMENTO ONLINE (Pix via AbacatePay)
+// ---------------------------------------------------------------------
+
+Table payments {
+  id uuid [pk]
+  order_id uuid [not null, ref: > orders.id]
+  provider_charge_id varchar(64) [not null, unique, note: 'Id da cobrança no gateway (pix_char_...)']
+  status payment_charge_status [not null, default: 'PENDING']
+  amount_cents integer [not null]
+  br_code text [not null, note: 'Pix copia-e-cola; o QR é renderizado pelo app']
+  platform_fee_cents integer
+  receipt_url varchar(255)
+  expires_at timestamptz [not null]
+  paid_at timestamptz
+  refunded_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    order_id
+    (status, expires_at) [note: 'Varredura de expiração e de estornos pendentes']
+    order_id [unique, name: 'payments_one_open_charge', note: 'Parcial WHERE status = PENDING: uma cobrança viva por pedido']
+  }
+}
+
+Table payment_webhook_events {
+  event_id varchar(128) [pk, note: 'Dedupe das retentativas do gateway (regra 6)']
+  event varchar(60) [not null]
+  provider_charge_id varchar(64)
+  payload jsonb [not null, note: 'Payload cru, para auditoria']
+  received_at timestamptz [not null, default: `now()`]
 }
 
 // ---------------------------------------------------------------------

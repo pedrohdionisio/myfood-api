@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   IChangeOrderStatusData,
@@ -23,6 +23,7 @@ import {
   orderStatusHistory,
   orders,
   outboxEvents,
+  payments,
   restaurantOrderCounters,
   restaurants
 } from '@/db/schema/index.js'
@@ -67,6 +68,10 @@ const ORDER_COLUMNS = {
 }
 
 const { deliveryCode: _withheldDeliveryCode, ...ORDER_COLUMNS_WITHOUT_CODE } = ORDER_COLUMNS
+
+// Pedido esperando Pix não existe para o restaurante: ele só aparece quando o pagamento confirma.
+// A máquina de estados já recusaria a transição, mas listá-lo mostraria pedido que ninguém pagou.
+const VISIBLE_TO_RESTAURANT = ne(orders.status, 'PENDING_PAYMENT')
 
 const ORDER_ITEM_COLUMNS = {
   id: orderItems.id,
@@ -193,7 +198,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
   }
 
   async create(data: ICreateOrderData): Promise<IOrder> {
-    const { idempotencyKey, customerId, restaurantId, items, ...values } = data
+    const { idempotencyKey, customerId, restaurantId, status, items, ...values } = data
 
     return this.database.db.transaction(async (tx) => {
       const claimed = await tx
@@ -231,7 +236,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
           customerId,
           restaurantId,
           displayNumber: counter.displayNumber,
-          status: 'PENDING'
+          status
         })
         .returning(ORDER_COLUMNS)
 
@@ -244,7 +249,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       await tx.insert(orderStatusHistory).values({
         orderId,
         fromStatus: null,
-        toStatus: 'PENDING',
+        toStatus: status,
         actorType: 'CUSTOMER',
         actorId: customerId
       })
@@ -254,7 +259,11 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         .set({ orderId })
         .where(eq(idempotencyKeys.key, idempotencyKey))
 
-      await enqueueEvent(tx, 'ORDER_CREATED', orderId)
+      // Pedido esperando Pix ainda não é pedido: o evento sai na confirmação do pagamento,
+      // senão os agregados contariam faturamento que nunca entrou.
+      if (status === 'PENDING') {
+        await enqueueEvent(tx, 'ORDER_CREATED', orderId)
+      }
 
       return toOrder(created, await this.loadItems(tx, orderId))
     })
@@ -318,7 +327,9 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       })
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
-      .where(and(eq(orders.id, orderId), eq(orders.restaurantId, restaurantId)))
+      .where(
+        and(eq(orders.id, orderId), eq(orders.restaurantId, restaurantId), VISIBLE_TO_RESTAURANT)
+      )
       .limit(1)
 
     if (!row) {
@@ -343,6 +354,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       .where(
         and(
           eq(orders.restaurantId, restaurantId),
+          VISIBLE_TO_RESTAURANT,
           filter.status ? eq(orders.status, filter.status) : undefined
         )
       )
@@ -394,6 +406,13 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
 
       if (to === 'CANCELED' || to === 'REJECTED') {
         await enqueueEvent(tx, 'ORDER_CANCELED', orderId)
+
+        // Pedido pago que não vai acontecer devolve o dinheiro. Fica na fila em vez de chamar o
+        // gateway aqui: HTTP dentro de transação deixaria o commit à mercê da rede.
+        await tx
+          .update(payments)
+          .set({ status: 'REFUND_PENDING' })
+          .where(and(eq(payments.orderId, orderId), eq(payments.status, 'PAID')))
       }
 
       return true

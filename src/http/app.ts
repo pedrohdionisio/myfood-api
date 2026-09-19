@@ -32,11 +32,13 @@ import { registerMemberRoutes } from './routes/members.js'
 import { registerMenuCategoryRoutes } from './routes/menu-categories.js'
 import { registerOpeningHoursRoutes } from './routes/opening-hours.js'
 import { registerOrderRoutes } from './routes/orders.js'
+import { registerPaymentRoutes } from './routes/payments.js'
 import { registerProductRoutes } from './routes/products.js'
 import { registerRestaurantOrderRoutes } from './routes/restaurant-orders.js'
 import { registerRestaurantReviewRoutes } from './routes/restaurant-reviews.js'
 import { registerRestaurantRoutes } from './routes/restaurants.js'
 import { registerUploadRoutes } from './routes/uploads.js'
+import { registerWebhookRoutes } from './routes/webhooks.js'
 
 export type App = FastifyInstance<
   RawServerDefault,
@@ -109,11 +111,13 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerMenuCategoryRoutes(app, container)
   registerProductRoutes(app, container)
   registerOrderRoutes(app, container)
+  registerPaymentRoutes(app, container)
   registerRestaurantOrderRoutes(app, container)
   registerDeliveryRoutes(app, container)
   registerRestaurantReviewRoutes(app, container)
   registerAnalyticsRoutes(app, container)
   registerUploadRoutes(app, container)
+  await registerWebhookRoutes(app, container)
 
   return app
 }

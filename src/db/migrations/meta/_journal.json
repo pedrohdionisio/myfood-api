@@ -85,6 +85,13 @@
       "when": 1789693090686,
       "tag": "0011_watery_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789844716237,
+      "tag": "0012_ordinary_tarot",
+      "breakpoints": true
     }
   ]
 }

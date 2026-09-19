@@ -157,7 +157,7 @@ Product add-ons (`option_groups`, `options`, `order_item_options`) are planned b
 
 | From | To | Actor |
 |---|---|---|
-| — | `PENDING_PAYMENT` | Customer (online payment) |
+| — | `PENDING_PAYMENT` | Customer (online payment, §12) |
 | — | `PENDING` | Customer (pay on delivery) |
 | `PENDING_PAYMENT` | `PENDING` | System (payment confirmed) |
 | `PENDING_PAYMENT` | `CANCELED` | System (payment expired/failed) |
@@ -172,7 +172,7 @@ Product add-ons (`option_groups`, `options`, `order_item_options`) are planned b
 
 Two refinements to the table above:
 
-- **The customer cancels only from `PENDING`.** Once the restaurant confirms, food may already be in the pan; from there cancellation is the restaurant's call.
+- **The customer cancels only from `PENDING`.** Once the restaurant confirms, food may already be in the pan; from there cancellation is the restaurant's call. From `PENDING_PAYMENT` there is nothing to cancel: not paying is the cancellation, and the sweeper records it.
 - **Drivers do not self-assign.** `READY` → `OUT_FOR_DELIVERY` is the owner's transition, and it is what sets `driver_member_id`.
 
 Transitions are validated in a single domain module. Every transition writes to `order_status_history` in the same transaction and sets the matching timestamp on `orders` (`confirmed_at`, `ready_at`, `dispatched_at`, `delivered_at`, `finished_at`).
@@ -276,16 +276,71 @@ Dashboard analytics read from aggregate tables, never from on-the-fly scans of `
 - **Customers:** Expo push notification on every order status change, plus React Query refetching while an order is active.
 - **Restaurants:** new orders must alert the dashboard immediately. The MVP uses **SSE** (`GET /restaurants/:id/orders/stream`), which is one-directional — exactly what the dashboard needs — and works over plain HTTP. A WebSocket would force the transport decision now, and in-process WebSockets do not survive a move to Lambda.
 
-## 12. Payments (pending)
+## 12. Payments
 
-The payment gateway has not been chosen. The expected model is a marketplace with split payments:
+**The gateway is AbacatePay, Pix only (D15).** `payment_method = 'ONLINE'` means a Pix QR Code
+generated through their *Checkout Transparente*: the customer never leaves the app, and the API
+owns every call to the provider through `IPaymentGateway`, exactly as it does with Cognito.
 
-- The restaurant becomes a recipient or sub-account during onboarding.
-- Webhooks are verified, queued in SQS and processed idempotently.
+**There is no split, and the restaurant is not a recipient (D15).** AbacatePay publishes no
+marketplace or sub-account API, so the whole amount settles into the platform account and paying
+the restaurant happens outside the system. This is the one place where MyFood is deliberately not
+a marketplace; it is a study project, and the flow worth demonstrating is "customer pays, order is
+released", not the ledger.
 
-**Until a gateway exists, the API rejects `payment_method = 'ONLINE'` at validation.** `PENDING_PAYMENT` stays in the enum and in the state machine, but no route produces it. Orders are created directly in `PENDING`, and `payment_status` moves to `PAID` on delivery.
+### 12.1 The flow
 
-This keeps the gateway a pure addition: nothing written before it has to be undone. `payments` and `webhook_events` tables arrive with the integration.
+| Step | What happens |
+|---|---|
+| `POST /orders` with `ONLINE` | Order is created in `PENDING_PAYMENT`. **No `ORDER_CREATED` event.** |
+| `POST /orders/:id/payment` | Charge created at the gateway, stored in `payments`, `brCode` returned |
+| `transparent.completed` webhook | Charge `PAID`, order `PENDING_PAYMENT` → `PENDING`, `ORDER_CREATED` enqueued |
+| nobody pays | Worker expires the charge and cancels the order |
+| paid order canceled or rejected | Charge goes to `REFUND_PENDING`; the worker refunds it |
+
+**Checkout does not call the gateway.** An outbound HTTP call glued to the checkout transaction
+would put the commit at the mercy of the network, and a second route is needed regardless — the QR
+expires and the customer comes back to the screen later. One route covers all of it.
+
+**`ORDER_CREATED` is deferred for online orders.** An order waiting on a Pix is not an order yet:
+letting the event out at checkout would make `restaurant_daily_stats` count revenue that never
+arrived. The event is enqueued in the same transaction that confirms the payment.
+
+**An expired charge is not reissued.** The order is canceled instead, and the customer orders
+again. Regenerating a QR over an old order would hand out a price that checkout is supposed to
+recalculate from the database (rule 2).
+
+### 12.2 Webhook
+
+`POST /webhooks/abacatepay`, public, verified twice: the `webhookSecret` query parameter and an
+HMAC-SHA256 signature in `X-Webhook-Signature`, both compared in constant time. The signature is
+over the **raw** bytes, so the route lives in an encapsulated scope with its own content-type
+parser — reserializing the parsed object would change spacing and key order and break the HMAC.
+
+`payment_webhook_events` gives idempotency (rule 6) and audit in one table: the row is inserted in
+the same transaction that applies the effect, so its existence *is* the processed flag. The global
+rate limit is off for this route, because the gateway's retries arrive in bursts.
+
+Status codes are part of the contract: 401 for a failed check and 500 for a genuine processing
+failure, because AbacatePay retries on `5xx` (7 attempts over ~18h) and never on other `4xx`.
+
+### 12.3 Why SQS is not in the path
+
+The architecture originally expected webhooks to be queued in SQS. They are not. The handler is a
+single short transaction, and the durability a queue would add is already provided by the
+gateway's own retries plus the reconciliation sweep below. A queue here would buy a second failure
+mode, not a guarantee.
+
+### 12.4 Reconciliation (D16)
+
+AbacatePay emits no "expired" event, so expiry is ours to detect: the `payments` worker sweeps
+every 60s. **Before canceling, it asks the gateway for the real status.** If the money arrived and
+the webhook was lost, the order is confirmed instead of killed. That check is what keeps a missed
+webhook from being a lost order — the webhook is the fast path, not the only path.
+
+The same worker drains `REFUND_PENDING`. The refund is queued inside the cancellation transaction
+rather than called from it, for the same reason checkout does not call the gateway. AbacatePay's
+refund endpoint is idempotent per charge id, so a retry cannot double-refund.
 
 ## 13. Decisions
 
@@ -293,7 +348,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 
 | # | Decision |
 |---|---|
-| D1 | No `payments` / `webhook_events` in the MVP. `payment_status` becomes `PAID` on delivery. |
+| D1 | ~~No `payments` / `webhook_events` in the MVP~~ — superseded by D15. |
 | D2 | Checkout is idempotent through an `Idempotency-Key` header and the `idempotency_keys` table (§7.4). |
 | D3 | Dashboard real-time uses SSE, not WebSocket (§11). |
 | D4 | ~~Google Geocoding API behind a `Geocoder` port~~ — superseded by D13. ViaCEP still autocompletes the address text (§9). |
@@ -307,10 +362,13 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D12 | Drivers do not self-assign `READY` orders (§7.1). |
 | D13 | No geolocation in the MVP. Delivery is city-based with a flat fee per restaurant (§9). |
 | D14 | Image variants are served from a public `media/` prefix, not presigned GETs: a menu listing would need one signature per product, and an expiring URL cannot be cached by a CDN (§6.1). |
+| D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
+| D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
 
 ## 14. Open questions
 
-- Payment gateway choice and split model
+- How the restaurant actually gets paid, given D15 leaves settlement outside the system
+- Disputes (`transparent.disputed`): the event exists and is not subscribed
 - Future deployment model for the API and database (e.g. Lambda + Neon)
 - Review window: how long after delivery a customer may still review an order
 - When to reintroduce geolocation, and whether to do it with `geography` plus a generation workaround or with `geometry` and casts (§9)

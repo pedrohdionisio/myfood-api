@@ -14,6 +14,7 @@ import { generateDeliveryCode, resolveDeliveryFee } from '@/domain/delivery.js'
 import type { PaymentMethod } from '@/domain/enums.js'
 import { DomainError, NotFoundError } from '@/domain/errors.js'
 import { isOpenAt } from '@/domain/opening-hours.js'
+import { initialOrderStatus } from '@/domain/order-status.js'
 import { calculateLineTotal } from '@/domain/pricing.js'
 import { BUSINESS_TIME_ZONE } from '@/domain/time.js'
 
@@ -50,13 +51,6 @@ export class CreateOrderUseCase {
   ) {}
 
   async execute(input: ICreateOrderInput): Promise<IOrder> {
-    if (input.paymentMethod === 'ONLINE') {
-      throw new DomainError(
-        'Pagamento online ainda não tem gateway.',
-        'Pagamento online ainda não está disponível. Escolha pagar na entrega.'
-      )
-    }
-
     const replayed = await this.orders.findByIdempotencyKey(input.idempotencyKey, input.customerId)
 
     if (replayed) {
@@ -120,6 +114,7 @@ export class CreateOrderUseCase {
       idempotencyKey: input.idempotencyKey,
       customerId: input.customerId,
       restaurantId: restaurant.id,
+      status: initialOrderStatus(input.paymentMethod),
       paymentMethod: input.paymentMethod,
       changeForCents: input.changeForCents,
       subtotalCents,

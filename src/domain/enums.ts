@@ -24,6 +24,19 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 export const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED'] as const
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 
+// Estado da cobrança no gateway, mais fino que o payment_status do pedido: REFUND_PENDING existe
+// porque o estorno é pedido dentro da transação do cancelamento e executado depois, pelo worker.
+export const PAYMENT_CHARGE_STATUSES = [
+  'PENDING',
+  'PAID',
+  'EXPIRED',
+  'CANCELED',
+  'REFUND_PENDING',
+  'REFUNDED',
+  'FAILED'
+] as const
+export type PaymentChargeStatus = (typeof PAYMENT_CHARGE_STATUSES)[number]
+
 export const ACTOR_TYPES = ['CUSTOMER', 'RESTAURANT_USER', 'SYSTEM'] as const
 export type ActorType = (typeof ACTOR_TYPES)[number]
 

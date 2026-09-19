@@ -1,4 +1,4 @@
-import type { ActorType, OrderStatus } from './enums.js'
+import type { ActorType, OrderStatus, PaymentMethod } from './enums.js'
 import { DomainError } from './errors.js'
 
 // Dono e entregador são os dois RESTAURANT_USER, mas despachar e confirmar entrega não são a
@@ -61,6 +61,11 @@ export const ACTOR_TYPE_BY_TRANSITION_ACTOR: Record<TransitionActor, ActorType> 
   OWNER: 'RESTAURANT_USER',
   DRIVER: 'RESTAURANT_USER',
   SYSTEM: 'SYSTEM'
+}
+
+// Pedido online nasce esperando o Pix: o restaurante só o enxerga quando o pagamento confirma.
+export function initialOrderStatus(paymentMethod: PaymentMethod): OrderStatus {
+  return paymentMethod === 'ONLINE' ? 'PENDING_PAYMENT' : 'PENDING'
 }
 
 export function canTransition(from: OrderStatus, to: OrderStatus, actor: TransitionActor): boolean {

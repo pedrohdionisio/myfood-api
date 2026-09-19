@@ -4,19 +4,19 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 9 — Events and analytics. Phases 0–8 are done.
+**Current phase:** Phase 10 — Online payment. Phases 0–9 are done; Phase 10 is written and waiting on the end-to-end run (see its "Done when").
 
 ---
 
 ## Ground rules for every phase
 
-- **No tests for now.** No unit, integration or e2e tests, and no test tooling. Everything that was going to be proven by a test is listed in Phase 12 so nothing is lost; real verification is manual and belongs to the user.
+- **No tests for now.** No unit, integration or e2e tests, and no test tooling. Everything that was going to be proven by a test is listed in Phase 13 so nothing is lost; real verification is manual and belongs to the user.
 - **Automated verification after every action is `pnpm lint && pnpm typecheck`.** Nothing else. Phase 0 must create those two scripts, since every later phase depends on them.
 - A phase is done when its "Done when" line holds and both checks pass.
 - Every route declares Zod schemas for params, query, body **and response**.
 - No phase leaves the build red or the OpenAPI spec broken — the two frontends generate clients from it.
 
-> **What deferring tests costs.** Response schemas are the only thing keeping `delivery_code` out of restaurant and driver payloads (non-negotiable rule 1). Fastify serializes only declared fields, so the guarantee is structural and holds — but nothing will *catch a regression* until Phase 12. Same for the concurrency invariants in Phases 6 and 7: the code is written to be correct, not proven correct. Treat those spots as the ones to re-read when the suite arrives.
+> **What deferring tests costs.** Response schemas are the only thing keeping `delivery_code` out of restaurant and driver payloads (non-negotiable rule 1). Fastify serializes only declared fields, so the guarantee is structural and holds — but nothing will *catch a regression* until Phase 13. Same for the concurrency invariants in Phases 6 and 7: the code is written to be correct, not proven correct. Treat those spots as the ones to re-read when the suite arrives.
 
 ---
 
@@ -316,7 +316,7 @@ One transaction:
 - [x] Customer: `GET /orders`, `GET /orders/:id` — **the only response schema in the codebase that declares `deliveryCode`** — and `POST /orders/:id/cancel` (allowed from `PENDING` only, D11)
 - [x] Restaurant: `GET /restaurants/:id/orders` and `confirm` / `reject` / `preparing` / `ready` / `dispatch` / `cancel`, every one going through the state machine and writing `order_status_history` in the same transaction (rule 3), using DTOs **without** `deliveryCode`
 
-**Done when:** `grep -ri "deliverycode" src/` shows the field in exactly one response schema (rule 1), and a hand-run script firing concurrent checkouts at one restaurant leaves no duplicate `display_number` — verify with `SELECT display_number, count(*) FROM orders GROUP BY 1 HAVING count(*) > 1`. ⚠️ **Metade provada.** O grep devolve exatamente uma declaração; a corrida de checkouts simultâneos não foi montada e fica para a Fase 12.
+**Done when:** `grep -ri "deliverycode" src/` shows the field in exactly one response schema (rule 1), and a hand-run script firing concurrent checkouts at one restaurant leaves no duplicate `display_number` — verify with `SELECT display_number, count(*) FROM orders GROUP BY 1 HAVING count(*) > 1`. ⚠️ **Metade provada.** O grep devolve exatamente uma declaração; a corrida de checkouts simultâneos não foi montada e fica para a Fase 13.
 
 ### Notes from Phase 6
 
@@ -361,7 +361,7 @@ One transaction:
       architecture.md §7.1 dá a transição ao dono também, e sem ela o dono não destrava um pedido
       quando o celular do entregador morre
 
-**Done when:** repeated wrong codes start returning 429 and every attempt shows up in `delivery_confirmation_attempts`; two confirmations fired together leave exactly one `DELIVERED` and one status-history row. ⚠️ **Metade provada.** As tentativas e o 429 foram exercitados à mão (5 erradas → 429, e o código certo bloqueado depois disso); a corrida de duas confirmações simultâneas não foi montada e fica para a Fase 12. A garantia é estrutural: id, status e código no mesmo `WHERE`.
+**Done when:** repeated wrong codes start returning 429 and every attempt shows up in `delivery_confirmation_attempts`; two confirmations fired together leave exactly one `DELIVERED` and one status-history row. ⚠️ **Metade provada.** As tentativas e o 429 foram exercitados à mão (5 erradas → 429, e o código certo bloqueado depois disso); a corrida de duas confirmações simultâneas não foi montada e fica para a Fase 13. A garantia é estrutural: id, status e código no mesmo `WHERE`.
 
 ### Notes from Phase 7
 
@@ -439,7 +439,45 @@ One transaction:
 
 ---
 
-## Phase 10 — Notifications and real-time
+## Phase 10 — Online payment (Pix via AbacatePay)
+
+Read `architecture.md` §12 first. The gateway decision (D15: Pix only, **no split**) and the
+reconciliation decision (D16) are what shape everything here.
+
+- [x] `payment_charge_status` enum; `payments` and `payment_webhook_events` tables (migration `0012`)
+- [x] `IPaymentGateway` port + `AbacatePayPaymentGateway` over `fetch`, no SDK
+- [x] `IPaymentsRepository` port + Drizzle implementation
+- [x] Checkout accepts `ONLINE`: order starts in `PENDING_PAYMENT` via `initialOrderStatus`
+- [x] **`ORDER_CREATED` deferred for online orders** — enqueued when payment confirms, not at checkout
+- [x] `POST /orders/:orderId/payment` (creates or returns the live charge) and `GET .../payment`
+- [x] `POST /webhooks/abacatepay`: raw-body scope, `webhookSecret` + HMAC both constant-time,
+      rate limit off, dedupe by event id
+- [x] `transparent.completed` → charge `PAID`, order `PENDING_PAYMENT` → `PENDING` (SYSTEM), history, outbox
+- [x] `transparent.refunded` → charge `REFUNDED`, `orders.payment_status = REFUNDED`
+- [x] Refund on cancel/reject: the charge goes to `REFUND_PENDING` inside the same transaction
+- [x] `payments` worker: expires charges (**checking the gateway first**), cancels the order, drains refunds
+- [x] `docs/`, `.env.example`, compose service, `pnpm worker:payments`
+- [ ] **End-to-end run** — deferred by the user until the code was in place
+
+**Manual setup (the user's side):** account and Dev-mode key → `.env` → an HTTPS tunnel
+(`cloudflared tunnel --url http://localhost:3333`) → webhook registered in the dashboard with the
+same secret and the `transparent.completed` + `transparent.refunded` events.
+
+**Done when:** an online checkout returns a `brCode`;
+`POST /v2/transparents/simulate-payment?id=...` with the dev key makes the webhook land; and
+`orders` shows `PENDING` + `payment_status = PAID` with two rows in `order_status_history`, the
+second one `SYSTEM`. Then: cancel that order and watch the worker refund it
+(`payments.status` `REFUND_PENDING` → `REFUNDED`).
+
+⚠️ **Two things the first real event has to settle.** The v2 envelope is documented with a
+top-level `id`, but the transparent-checkout example omits it — the code falls back to
+`event:chargeId` as the dedupe key, and that fallback should be confirmed or dropped once a real
+payload is in `payment_webhook_events`. Same for the charge id prefix: creation returns
+`pix_char_...`, the event example shows `char_...`.
+
+---
+
+## Phase 11 — Notifications and real-time
 
 - [ ] `push_tokens` registration
 - [ ] Expo push on every status change — **the text never contains the delivery code** (rule 1)
@@ -449,7 +487,7 @@ One transaction:
 
 ---
 
-## Phase 11 — Hardening
+## Phase 12 — Hardening
 
 - [ ] OpenAPI pass: `operationId`s, tags, examples, error shapes — this is the frontends' contract
 - [ ] Rate limits on auth, checkout and delivery confirmation
@@ -460,7 +498,7 @@ One transaction:
 
 ---
 
-## Phase 12 — Test suite (deferred)
+## Phase 13 — Test suite (deferred)
 
 Not scheduled. Listed so the deferred verification is not lost, roughly in order of what is worth writing first.
 

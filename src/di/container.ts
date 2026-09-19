@@ -10,6 +10,8 @@ import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCa
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
 import type { IOutboxRepository } from '@/application/interfaces/IOutboxRepository.js'
+import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
+import type { IPaymentsRepository } from '@/application/interfaces/IPaymentsRepository.js'
 import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
@@ -56,6 +58,10 @@ import { DispatchOrderUseCase } from '@/application/useCases/orders/DispatchOrde
 import { GetCustomerOrderUseCase } from '@/application/useCases/orders/GetCustomerOrderUseCase.js'
 import { ListCustomerOrdersUseCase } from '@/application/useCases/orders/ListCustomerOrdersUseCase.js'
 import { ListRestaurantOrdersUseCase } from '@/application/useCases/orders/ListRestaurantOrdersUseCase.js'
+import { CreatePixPaymentUseCase } from '@/application/useCases/payments/CreatePixPaymentUseCase.js'
+import { GetOrderPaymentUseCase } from '@/application/useCases/payments/GetOrderPaymentUseCase.js'
+import { ProcessPaymentWebhookUseCase } from '@/application/useCases/payments/ProcessPaymentWebhookUseCase.js'
+import { SettlePendingChargesUseCase } from '@/application/useCases/payments/SettlePendingChargesUseCase.js'
 import { ArchiveProductUseCase } from '@/application/useCases/products/ArchiveProductUseCase.js'
 import { CreateProductUseCase } from '@/application/useCases/products/CreateProductUseCase.js'
 import { ListProductsUseCase } from '@/application/useCases/products/ListProductsUseCase.js'
@@ -75,6 +81,7 @@ import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateI
 import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
 import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
+import { AbacatePayPaymentGateway } from '@/infra/gateways/AbacatePayPaymentGateway.js'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
 import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
@@ -88,6 +95,7 @@ import { DrizzleMenuCategoriesRepository } from '@/infra/repositories/DrizzleMen
 import { DrizzleOpeningHoursRepository } from '@/infra/repositories/DrizzleOpeningHoursRepository.js'
 import { DrizzleOrdersRepository } from '@/infra/repositories/DrizzleOrdersRepository.js'
 import { DrizzleOutboxRepository } from '@/infra/repositories/DrizzleOutboxRepository.js'
+import { DrizzlePaymentsRepository } from '@/infra/repositories/DrizzlePaymentsRepository.js'
 import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
@@ -145,6 +153,18 @@ export function buildContainer(env: Env): DependencyContainer {
   })
 
   container.register<string>(TOKENS.MediaBaseUrl, { useValue: env.MEDIA_BASE_URL })
+
+  container.register<IPaymentGateway>(TOKENS.PaymentGateway, {
+    useValue: new AbacatePayPaymentGateway(env.ABACATEPAY_API_URL, env.ABACATEPAY_API_KEY)
+  })
+
+  container.register<string>(TOKENS.PaymentWebhookSecret, {
+    useValue: env.ABACATEPAY_WEBHOOK_SECRET
+  })
+
+  container.register<number>(TOKENS.PixExpiresInSeconds, {
+    useValue: env.PAYMENT_PIX_EXPIRES_IN_SECONDS
+  })
 
   container.register<ICustomersRepository>(
     TOKENS.CustomersRepository,
@@ -430,6 +450,12 @@ export function buildContainer(env: Env): DependencyContainer {
     { lifecycle: Lifecycle.Singleton }
   )
 
+  container.register<IPaymentsRepository>(
+    TOKENS.PaymentsRepository,
+    { useClass: DrizzlePaymentsRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
   container.register(
     TOKENS.CreateOrderUseCase,
     { useClass: CreateOrderUseCase },
@@ -451,6 +477,30 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.CancelOrderUseCase,
     { useClass: CancelOrderUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.CreatePixPaymentUseCase,
+    { useClass: CreatePixPaymentUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetOrderPaymentUseCase,
+    { useClass: GetOrderPaymentUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.ProcessPaymentWebhookUseCase,
+    { useClass: ProcessPaymentWebhookUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.SettlePendingChargesUseCase,
+    { useClass: SettlePendingChargesUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

@@ -107,9 +107,11 @@ authenticate but has no identity here, which is a broken state, not a degraded o
 5. **Authorization checks restaurant membership and role in the database on every request** (`restaurant_members.active`), not only Cognito token claims. Restaurant-scoped routes live under `/restaurants/:restaurantId/`, and `requireMembership` resolves the membership from that path param.
 6. **SQS consumers are idempotent** via `processed_messages`.
 7. **Order item prices use `calculateLineTotal`**, a single function shared across the codebase. `order_items.unit_price_cents` is the final per-unit price of the line.
+8. **Payment webhooks are verified twice** — `webhookSecret` query param and the `X-Webhook-Signature` HMAC, both in constant time — and deduplicated by event id in `payment_webhook_events`. The route answers 401 on a failed check and **500 on a processing failure**, because that is what makes AbacatePay retry.
+9. **`ORDER_CREATED` is only enqueued once the order is really placed.** For `ONLINE` that is when the payment confirms, not at checkout — otherwise the aggregates count revenue that never arrived.
 
 ## Out of scope for now
 
 - Product add-ons (`option_groups`, `options`): not in the MVP, but the code must stay ready for them (see architecture doc)
-- Online payments: the gateway has not been chosen yet
+- Paying the restaurant: AbacatePay has no split, so settlement happens outside the system (D15)
 - Real-time driver location on a map

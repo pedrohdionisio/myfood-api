@@ -24,6 +24,12 @@ const envSchema = z.object({
   // A troca por um domínio de CDN é aqui: o resto do código só conhece esta base.
   MEDIA_BASE_URL: z.url().optional(),
 
+  ABACATEPAY_API_URL: z.url().default('https://api.abacatepay.com/v2'),
+  ABACATEPAY_API_KEY: z.string().min(1),
+  // O mesmo valor cadastrado no webhook do dashboard: chega como query param em cada entrega.
+  ABACATEPAY_WEBHOOK_SECRET: z.string().min(16),
+  PAYMENT_PIX_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1800),
+
   // Opcionais: sem elas o SDK resolve pela cadeia padrão (~/.aws/credentials, IAM role).
   // No container não há ~/.aws, então lá elas precisam vir do .env.
   AWS_ACCESS_KEY_ID: z.string().min(1).optional(),

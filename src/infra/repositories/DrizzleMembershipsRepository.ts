@@ -6,7 +6,8 @@ import type {
   IMembershipsRepository,
   IMemberWithUser,
   IRestaurantSummary,
-  ITeamMember
+  ITeamMember,
+  IUpdateMembershipData
 } from '@/application/interfaces/IMembershipsRepository.js'
 import type { ICreateRestaurantUserData } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
@@ -140,6 +141,35 @@ export class DrizzleMembershipsRepository implements IMembershipsRepository {
 
       throw error
     }
+  }
+
+  async update(
+    restaurantId: string,
+    id: string,
+    data: IUpdateMembershipData
+  ): Promise<ITeamMember | null> {
+    const [row] = await this.database.db
+      .update(restaurantMembers)
+      .set(data)
+      .from(restaurantUsers)
+      .where(
+        and(
+          eq(restaurantMembers.id, id),
+          eq(restaurantMembers.restaurantId, restaurantId),
+          eq(restaurantUsers.id, restaurantMembers.userId)
+        )
+      )
+      .returning({
+        id: restaurantMembers.id,
+        userId: restaurantMembers.userId,
+        name: restaurantUsers.name,
+        email: restaurantUsers.email,
+        phone: restaurantUsers.phone,
+        role: restaurantMembers.role,
+        active: restaurantMembers.active
+      })
+
+    return row ?? null
   }
 
   async createWithNewUser(

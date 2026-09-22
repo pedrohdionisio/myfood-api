@@ -123,6 +123,9 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `GET /restaurant-users/me/restaurants` — the restaurants the caller has an active membership in
 - [x] `POST /restaurants/:restaurantId/members` — owner adds a member; creates the Cognito account
       and both rows only when the person is new
+- [x] `PATCH /restaurants/:restaurantId/members/:memberId` — not in the original list; rule 5 read
+      `active` on every request and nothing ever wrote it, so there was no way to switch a member's
+      access off. Takes `role`, `active` or both
 
 **Done when:** a real Cognito token reaches a protected route, and the four rejection paths — no token, wrong pool, `active = false`, wrong role — each return the intended status when exercised by hand. ✅
 
@@ -139,6 +142,14 @@ No business logic. The goal is a repository where the next phase can be written 
 - **Adding a member is not always creating an account.** A driver can work for two restaurants, so
   the use case links an existing `restaurant_users` row when the e-mail is already known and only
   touches Cognito for genuinely new people.
+- **Refusing to act on your own membership is what keeps the last owner.** Whoever reaches the
+  `PATCH` has already passed `requireMembership('OWNER')`, and the use case rejects
+  `memberId === actorMembershipId` — so the author of the change is still an active `OWNER` after
+  it, and the team can never end up with none. One guard, instead of counting active owners inside
+  a transaction.
+- **Deactivating a driver mid-delivery does not strand the order.** `requireAssignedDriverMemberId`
+  reads active memberships only, so they lose `confirm-delivery` immediately; the way out is the
+  owner marking `delivery-failed` on the restaurant route, which already exists.
 - **Verified by hand, end to end:** owner and customer sign-up creating rows in both Cognito and
   Postgres; sign-in; refresh; wrong password; duplicate e-mail in Cognito and in the database (with
   the saga deleting the orphan); a driver created by the owner then signing in; a driver refused

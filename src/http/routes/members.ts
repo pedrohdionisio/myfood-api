@@ -2,16 +2,21 @@ import type { DependencyContainer } from 'tsyringe'
 import type { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import type { ListMembersUseCase } from '@/application/useCases/members/ListMembersUseCase.js'
 import type { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
+import type { UpdateMemberUseCase } from '@/application/useCases/members/UpdateMemberUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import {
   createMemberBodySchema,
   memberResponseSchema,
+  memberScopeParamsSchema,
   myRestaurantsResponseSchema,
-  teamMembersResponseSchema
+  teamMemberResponseSchema,
+  teamMembersResponseSchema,
+  updateMemberBodySchema
 } from '@/schemas/members.js'
 import type { App } from '../app.js'
 import { requireRestaurantUser } from '../plugins/auth.js'
+import { requireMembershipContext } from '../plugins/membership.js'
 
 export function registerMemberRoutes(app: App, container: DependencyContainer): void {
   const createMember = container.resolve<CreateMemberUseCase>(TOKENS.CreateMemberUseCase)
@@ -19,6 +24,7 @@ export function registerMemberRoutes(app: App, container: DependencyContainer): 
     TOKENS.ListMyRestaurantsUseCase
   )
   const listMembers = container.resolve<ListMembersUseCase>(TOKENS.ListMembersUseCase)
+  const updateMember = container.resolve<UpdateMemberUseCase>(TOKENS.UpdateMemberUseCase)
 
   app.get(
     '/restaurant-users/me/restaurants',
@@ -65,5 +71,26 @@ export function registerMemberRoutes(app: App, container: DependencyContainer): 
 
       return reply.status(201).send(result)
     }
+  )
+
+  app.patch(
+    '/restaurants/:restaurantId/members/:memberId',
+    {
+      schema: {
+        tags: ['members'],
+        summary: 'Dono muda o papel de um membro ou desliga o acesso dele',
+        params: memberScopeParamsSchema,
+        body: updateMemberBodySchema,
+        response: { 200: teamMemberResponseSchema }
+      },
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
+    },
+    async (request) =>
+      updateMember.execute({
+        restaurantId: request.params.restaurantId,
+        memberId: request.params.memberId,
+        actorMembershipId: requireMembershipContext(request).id,
+        ...request.body
+      })
   )
 }

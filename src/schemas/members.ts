@@ -9,6 +9,20 @@ export const createMemberBodySchema = z.object({
   phone: z.string().min(8).max(20).optional()
 })
 
+export const memberScopeParamsSchema = z.object({
+  restaurantId: z.uuid(),
+  memberId: z.uuid()
+})
+
+export const updateMemberBodySchema = z
+  .object({
+    role: z.enum(MEMBER_ROLES).optional(),
+    active: z.boolean().optional()
+  })
+  .refine((body) => body.role !== undefined || body.active !== undefined, {
+    message: 'Informe role ou active.'
+  })
+
 export const memberResponseSchema = z.object({
   membership: z.object({
     id: z.uuid(),
@@ -33,14 +47,14 @@ export const myRestaurantsResponseSchema = z.array(
   })
 )
 
-export const teamMembersResponseSchema = z.array(
-  z.object({
-    id: z.uuid(),
-    userId: z.uuid(),
-    name: z.string(),
-    email: z.string(),
-    phone: z.string().nullable(),
-    role: z.enum(MEMBER_ROLES),
-    active: z.boolean()
-  })
-)
+export const teamMemberResponseSchema = z.object({
+  id: z.uuid(),
+  userId: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable(),
+  role: z.enum(MEMBER_ROLES),
+  active: z.boolean()
+})
+
+export const teamMembersResponseSchema = z.array(teamMemberResponseSchema)

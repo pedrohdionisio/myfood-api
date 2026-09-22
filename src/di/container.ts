@@ -44,6 +44,7 @@ import { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMembersUseCase } from '@/application/useCases/members/ListMembersUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
+import { UpdateMemberUseCase } from '@/application/useCases/members/UpdateMemberUseCase.js'
 import { ArchiveMenuCategoryUseCase } from '@/application/useCases/menuCategories/ArchiveMenuCategoryUseCase.js'
 import { CreateMenuCategoryUseCase } from '@/application/useCases/menuCategories/CreateMenuCategoryUseCase.js'
 import { ListMenuCategoriesUseCase } from '@/application/useCases/menuCategories/ListMenuCategoriesUseCase.js'
@@ -532,6 +533,12 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ListMembersUseCase,
     { useClass: ListMembersUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateMemberUseCase,
+    { useClass: UpdateMemberUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

@@ -28,6 +28,11 @@ export interface ICreateMembershipData {
   role: MemberRole
 }
 
+export interface IUpdateMembershipData {
+  role?: MemberRole | undefined
+  active?: boolean | undefined
+}
+
 export interface IMemberWithUser {
   membership: IMembership
   user: IAuthenticatedRestaurantUser
@@ -55,6 +60,8 @@ export interface IMembershipsRepository {
   listByUser(userId: string): Promise<IRestaurantSummary[]>
 
   create(data: ICreateMembershipData): Promise<IMembership>
+
+  update(restaurantId: string, id: string, data: IUpdateMembershipData): Promise<ITeamMember | null>
 
   /**
    * Cria o usuário de restaurante e o vínculo na mesma transação. As duas linhas são uma

@@ -126,6 +126,10 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `PATCH /restaurants/:restaurantId/members/:memberId` — not in the original list; rule 5 read
       `active` on every request and nothing ever wrote it, so there was no way to switch a member's
       access off. Takes `role`, `active` or both
+- [x] `POST /auth/{customers,restaurant-users}/forgot-password | reset-password` — **added during
+      Phase 11**, not in the original list: sign-in existed with no way back from a lost password.
+      Cognito owns the code (D17); the e-mail body is a react-email template rendered by a
+      `CustomMessage` Lambda trigger and delivered by SES
 
 **Done when:** a real Cognito token reaches a protected route, and the four rejection paths — no token, wrong pool, `active = false`, wrong role — each return the intended status when exercised by hand. ✅
 
@@ -150,12 +154,35 @@ No business logic. The goal is a repository where the next phase can be written 
 - **Deactivating a driver mid-delivery does not strand the order.** `requireAssignedDriverMemberId`
   reads active memberships only, so they lose `confirm-delivery` immediately; the way out is the
   owner marking `delivery-failed` on the restaurant route, which already exists.
+- **Password recovery stayed inside `IAuthGateway` (D17).** The alternative was a
+  `password_reset_codes` table with generation, hashing, expiry and an attempt limit — all of which
+  Cognito already does, and none of which the local database needs to know about. `forgotPassword`
+  calls `ForgotPassword`, `resetPassword` calls `ConfirmForgotPassword`; no migration was needed.
+- **Neither recovery route says whether an e-mail exists.** `UserNotFoundException` is swallowed on
+  the request, and a wrong code and an unknown user give the same 422 on the reset — the same
+  reasoning that already made sign-in answer one message for both failures.
+- **The `CustomMessage` trigger is a legal Lambda** under the runtime rules: it renders HTML and
+  never touches Postgres. It is attached to both pools, and the rendered body must keep the literal
+  `{####}` that Cognito substitutes at send time — the code is a placeholder in the template, which
+  reads like a bug and is not.
+- **`pixelBasedPreset` is not optional in the Tailwind config.** Without it react-email emits `rem`,
+  which several e-mail clients ignore. It does not cover `borderRadius`, so the radii are written as
+  `rounded-[8px]` — a bare `rounded-lg` still emitted `0.5rem`.
+- **SES has to be verified before the deploy, not by it.** `EmailSendingAccount: DEVELOPER` makes
+  Cognito validate the identity while updating the pool, so an unverified `SES_FROM_ADDRESS` fails
+  the stack. The variable is read only by `serverless.yml`; `src/config/env.ts` does not know it,
+  because the API never sends e-mail.
+- **In the SES sandbox the recipient must be verified too**, not only the sender. Until production
+  access is granted, `forgot-password` only delivers to addresses verified in SES — so the account
+  used to test recovery has to be one of them. A request for an unverified address still answers
+  200, because the route deliberately cannot tell the caller whether delivery happened.
 - **Verified by hand, end to end:** owner and customer sign-up creating rows in both Cognito and
   Postgres; sign-in; refresh; wrong password; duplicate e-mail in Cognito and in the database (with
   the saga deleting the orphan); a driver created by the owner then signing in; a driver refused
   `POST /members` (OWNER only); an owner refused on a restaurant they have no membership in; a
-  customer token refused on a restaurant route; and `active = false` taking effect on the next
-  request with the same token.
+  customer token refused on a restaurant route; `active = false` taking effect on the next
+  request with the same token; and password recovery on both pools — the code arriving by e-mail
+  from the `CustomMessage` template, the reset accepted, and sign-in working with the new password.
 
 ---
 
@@ -538,6 +565,7 @@ Not scheduled. Listed so the deferred verification is not lost, roughly in order
 - [ ] `buildTestApp()` using `app.inject()` — no network port
 - [ ] Fake adapters for the three ports: `TokenVerifier`, `EventPublisher`, `FileStorage`
 - [ ] **Rule 1:** walk the JSON of every restaurant and driver route asserting `deliveryCode` / `delivery_code` is absent
+- [ ] Password recovery does not leak account existence: `forgot-password` and `reset-password` answer identically for a known and an unknown e-mail
 - [ ] **§12:** an order in `PENDING_PAYMENT` appears in no restaurant route — it leaked once already,
       because the dashboard queries never had to exclude a status that nothing produced
 - [ ] **Rule 4:** brute-force the delivery code until blocked; two concurrent confirmations → one `DELIVERED`

@@ -3,8 +3,16 @@ import {
   AdminDeleteUserCommand,
   AdminInitiateAuthCommand,
   AdminSetUserPasswordCommand,
+  CodeMismatchException,
   CognitoIdentityProviderClient,
+  ConfirmForgotPasswordCommand,
+  ExpiredCodeException,
+  ForgotPasswordCommand,
+  InvalidPasswordException,
+  LimitExceededException,
   NotAuthorizedException,
+  TooManyFailedAttemptsException,
+  TooManyRequestsException,
   UserNotFoundException,
   UsernameExistsException
 } from '@aws-sdk/client-cognito-identity-provider'
@@ -14,9 +22,15 @@ import type {
   ICreateAuthUserParams,
   ICreatedAuthUser,
   IRefreshedAuthSession,
+  IResetPasswordParams,
   ISignInParams
 } from '@/application/interfaces/IAuthGateway.js'
-import { ConflictError, UnauthorizedError } from '@/domain/errors.js'
+import {
+  ConflictError,
+  DomainError,
+  TooManyRequestsError,
+  UnauthorizedError
+} from '@/domain/errors.js'
 
 export interface ICognitoCredentials {
   accessKeyId: string
@@ -173,6 +187,76 @@ export class CognitoAuthGateway implements IAuthGateway {
     } catch (error) {
       if (error instanceof NotAuthorizedException) {
         throw new UnauthorizedError('Refresh token inválido ou expirado.')
+      }
+
+      throw error
+    }
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    try {
+      await this.client.send(
+        new ForgotPasswordCommand({ ClientId: this.clientId, Username: email })
+      )
+    } catch (error) {
+      if (error instanceof UserNotFoundException) {
+        return
+      }
+
+      if (error instanceof LimitExceededException || error instanceof TooManyRequestsException) {
+        throw new TooManyRequestsError(
+          `Cognito limitou o envio de código para ${email}.`,
+          'Muitas tentativas. Aguarde alguns minutos e tente de novo.'
+        )
+      }
+
+      throw error
+    }
+  }
+
+  async resetPassword(params: IResetPasswordParams): Promise<void> {
+    const { email, code, password } = params
+
+    try {
+      await this.client.send(
+        new ConfirmForgotPasswordCommand({
+          ClientId: this.clientId,
+          Username: email,
+          ConfirmationCode: code,
+          Password: password
+        })
+      )
+    } catch (error) {
+      if (error instanceof CodeMismatchException || error instanceof UserNotFoundException) {
+        throw new DomainError(
+          `Código de recuperação inválido para ${email}.`,
+          'Código inválido. Confira o e-mail e tente de novo.'
+        )
+      }
+
+      if (error instanceof ExpiredCodeException) {
+        throw new DomainError(
+          `Código de recuperação expirado para ${email}.`,
+          'Código expirado. Peça um novo código.'
+        )
+      }
+
+      if (error instanceof InvalidPasswordException) {
+        throw new DomainError(
+          `Senha recusada pela política do pool ${this.userPoolId}.`,
+          'A senha precisa ter ao menos 8 caracteres, com maiúscula, minúscula e número.'
+        )
+      }
+
+      if (
+        error instanceof TooManyFailedAttemptsException ||
+        error instanceof LimitExceededException ||
+        error instanceof TooManyRequestsException
+      ) {
+        throw new TooManyRequestsError(
+          `Cognito bloqueou as tentativas de troca de senha de ${email}.`,
+          'Muitas tentativas. Aguarde alguns minutos e tente de novo.'
+        )
       }
 
       throw error

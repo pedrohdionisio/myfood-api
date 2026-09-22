@@ -20,7 +20,9 @@ import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.j
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { GetAnalyticsUseCase } from '@/application/useCases/analytics/GetAnalyticsUseCase.js'
 import { ProcessOrderEventUseCase } from '@/application/useCases/analytics/ProcessOrderEventUseCase.js'
+import { ForgotPasswordUseCase } from '@/application/useCases/auth/ForgotPasswordUseCase.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
+import { ResetPasswordUseCase } from '@/application/useCases/auth/ResetPasswordUseCase.js'
 import { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCustomerUseCase.js'
 import { SignInRestaurantUserUseCase } from '@/application/useCases/auth/SignInRestaurantUserUseCase.js'
 import { SignUpCustomerUseCase } from '@/application/useCases/auth/SignUpCustomerUseCase.js'
@@ -228,6 +230,22 @@ export function buildContainer(env: Env): DependencyContainer {
 
   container.register(TOKENS.RefreshRestaurantSessionUseCase, {
     useValue: new RefreshSessionUseCase(restaurantAuthGateway)
+  })
+
+  container.register(TOKENS.ForgotCustomerPasswordUseCase, {
+    useValue: new ForgotPasswordUseCase(customerAuthGateway)
+  })
+
+  container.register(TOKENS.ResetCustomerPasswordUseCase, {
+    useValue: new ResetPasswordUseCase(customerAuthGateway)
+  })
+
+  container.register(TOKENS.ForgotRestaurantPasswordUseCase, {
+    useValue: new ForgotPasswordUseCase(restaurantAuthGateway)
+  })
+
+  container.register(TOKENS.ResetRestaurantPasswordUseCase, {
+    useValue: new ResetPasswordUseCase(restaurantAuthGateway)
   })
 
   container.register(

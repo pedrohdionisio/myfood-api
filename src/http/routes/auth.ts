@@ -1,5 +1,7 @@
 import type { DependencyContainer } from 'tsyringe'
+import type { ForgotPasswordUseCase } from '@/application/useCases/auth/ForgotPasswordUseCase.js'
 import type { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
+import type { ResetPasswordUseCase } from '@/application/useCases/auth/ResetPasswordUseCase.js'
 import type { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCustomerUseCase.js'
 import type { SignInRestaurantUserUseCase } from '@/application/useCases/auth/SignInRestaurantUserUseCase.js'
 import type { SignUpCustomerUseCase } from '@/application/useCases/auth/SignUpCustomerUseCase.js'
@@ -8,8 +10,11 @@ import { TOKENS } from '@/di/tokens.js'
 import {
   customerProfileResponseSchema,
   customerSessionResponseSchema,
+  forgotPasswordBodySchema,
+  passwordRecoveryResponseSchema,
   refreshBodySchema,
   refreshedSessionResponseSchema,
+  resetPasswordBodySchema,
   restaurantUserProfileResponseSchema,
   restaurantUserSessionResponseSchema,
   signInBodySchema,
@@ -19,10 +24,22 @@ import {
 import type { App } from '../app.js'
 import { requireCustomer, requireRestaurantUser } from '../plugins/auth.js'
 
+const CODE_SENT_MESSAGE =
+  'Se este e-mail tiver cadastro, enviamos um código de recuperação para ele.'
+const PASSWORD_CHANGED_MESSAGE = 'Senha alterada. Entre com a nova senha.'
+
+// Recuperação de senha é alvo fácil de força bruta e de uso da caixa de entrada de terceiros
+// como spam, então o limite é mais apertado que o do login.
+const PASSWORD_RECOVERY_RATE_LIMIT = { rateLimit: { max: 5, timeWindow: '1 minute' } }
+
 export function registerCustomerAuthRoutes(app: App, container: DependencyContainer): void {
   const signUp = container.resolve<SignUpCustomerUseCase>(TOKENS.SignUpCustomerUseCase)
   const signIn = container.resolve<SignInCustomerUseCase>(TOKENS.SignInCustomerUseCase)
   const refresh = container.resolve<RefreshSessionUseCase>(TOKENS.RefreshCustomerSessionUseCase)
+  const forgotPassword = container.resolve<ForgotPasswordUseCase>(
+    TOKENS.ForgotCustomerPasswordUseCase
+  )
+  const resetPassword = container.resolve<ResetPasswordUseCase>(TOKENS.ResetCustomerPasswordUseCase)
 
   app.post(
     '/auth/customers/sign-up',
@@ -65,6 +82,42 @@ export function registerCustomerAuthRoutes(app: App, container: DependencyContai
     async (request) => refresh.execute(request.body.refreshToken)
   )
 
+  app.post(
+    '/auth/customers/forgot-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Envia por e-mail o código de recuperação de senha do cliente',
+        body: forgotPasswordBodySchema,
+        response: { 200: passwordRecoveryResponseSchema }
+      },
+      config: PASSWORD_RECOVERY_RATE_LIMIT
+    },
+    async (request) => {
+      await forgotPassword.execute(request.body.email)
+
+      return { message: CODE_SENT_MESSAGE }
+    }
+  )
+
+  app.post(
+    '/auth/customers/reset-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Troca a senha do cliente usando o código recebido por e-mail',
+        body: resetPasswordBodySchema,
+        response: { 200: passwordRecoveryResponseSchema }
+      },
+      config: PASSWORD_RECOVERY_RATE_LIMIT
+    },
+    async (request) => {
+      await resetPassword.execute(request.body)
+
+      return { message: PASSWORD_CHANGED_MESSAGE }
+    }
+  )
+
   app.get(
     '/customers/me',
     {
@@ -87,6 +140,12 @@ export function registerRestaurantAuthRoutes(app: App, container: DependencyCont
   const signUp = container.resolve<SignUpRestaurantUserUseCase>(TOKENS.SignUpRestaurantUserUseCase)
   const signIn = container.resolve<SignInRestaurantUserUseCase>(TOKENS.SignInRestaurantUserUseCase)
   const refresh = container.resolve<RefreshSessionUseCase>(TOKENS.RefreshRestaurantSessionUseCase)
+  const forgotPassword = container.resolve<ForgotPasswordUseCase>(
+    TOKENS.ForgotRestaurantPasswordUseCase
+  )
+  const resetPassword = container.resolve<ResetPasswordUseCase>(
+    TOKENS.ResetRestaurantPasswordUseCase
+  )
 
   app.post(
     '/auth/restaurant-users/sign-up',
@@ -127,6 +186,42 @@ export function registerRestaurantAuthRoutes(app: App, container: DependencyCont
       }
     },
     async (request) => refresh.execute(request.body.refreshToken)
+  )
+
+  app.post(
+    '/auth/restaurant-users/forgot-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Envia por e-mail o código de recuperação de senha do usuário de restaurante',
+        body: forgotPasswordBodySchema,
+        response: { 200: passwordRecoveryResponseSchema }
+      },
+      config: PASSWORD_RECOVERY_RATE_LIMIT
+    },
+    async (request) => {
+      await forgotPassword.execute(request.body.email)
+
+      return { message: CODE_SENT_MESSAGE }
+    }
+  )
+
+  app.post(
+    '/auth/restaurant-users/reset-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Troca a senha do usuário de restaurante usando o código recebido por e-mail',
+        body: resetPasswordBodySchema,
+        response: { 200: passwordRecoveryResponseSchema }
+      },
+      config: PASSWORD_RECOVERY_RATE_LIMIT
+    },
+    async (request) => {
+      await resetPassword.execute(request.body)
+
+      return { message: PASSWORD_CHANGED_MESSAGE }
+    }
   )
 
   app.get(

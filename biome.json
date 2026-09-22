@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**/*.ts", "**/*.json", "!**/node_modules", "!src/db/migrations"]
+    "includes": ["**/*.ts", "**/*.tsx", "**/*.json", "!**/node_modules", "!src/db/migrations"]
   },
   "formatter": {
     "enabled": true,

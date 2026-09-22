@@ -13,6 +13,12 @@ export interface ISignInParams {
   password: string
 }
 
+export interface IResetPasswordParams {
+  email: string
+  code: string
+  password: string
+}
+
 export interface IAuthSession {
   accessToken: string
   idToken: string
@@ -40,4 +46,9 @@ export interface IAuthGateway {
   signIn(params: ISignInParams): Promise<IAuthSession>
 
   refreshSession(refreshToken: string): Promise<IRefreshedAuthSession>
+
+  /** Dispara o e-mail com o código de recuperação. Silencioso para e-mail inexistente. */
+  forgotPassword(email: string): Promise<void>
+
+  resetPassword(params: IResetPasswordParams): Promise<void>
 }

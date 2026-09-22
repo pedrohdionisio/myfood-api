@@ -54,6 +54,11 @@ layers:
       - nodejs24.x
 
 functions:
+  cognitoCustomMessage:
+    handler: src/lambda/cognito-custom-message.handler
+    timeout: 5
+    memorySize: 512
+
   processImage:
     handler: src/lambda/process-image.handler
     # Precisa ser menor que o VisibilityTimeout da fila (120s), senão a mensagem reaparece
@@ -80,6 +85,20 @@ resources:
         UserPoolName: myfood-customers-${sls:stage}
         UsernameAttributes: [email]
         AutoVerifiedAttributes: [email]
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+        EmailConfiguration:
+          # DEVELOPER = o Cognito envia pelo SES com o nosso remetente. O padrão
+          # (COGNITO_DEFAULT) tem teto de 50 e-mails/dia e remetente da AWS.
+          EmailSendingAccount: DEVELOPER
+          From: ${env:SES_FROM_ADDRESS}
+          SourceArn: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${env:SES_FROM_ADDRESS}'
+        LambdaConfig:
+          # ARN escrito à mão em vez de !GetAtt: a permissão abaixo precisa do ARN do pool,
+          # e referenciar a função aqui fecharia um ciclo no CloudFormation.
+          CustomMessage: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-cognitoCustomMessage'
         Policies:
           PasswordPolicy:
             MinimumLength: 8
@@ -111,6 +130,20 @@ resources:
         AutoVerifiedAttributes: [email]
         AdminCreateUserConfig:
           AllowAdminCreateUserOnly: false
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+        EmailConfiguration:
+          # DEVELOPER = o Cognito envia pelo SES com o nosso remetente. O padrão
+          # (COGNITO_DEFAULT) tem teto de 50 e-mails/dia e remetente da AWS.
+          EmailSendingAccount: DEVELOPER
+          From: ${env:SES_FROM_ADDRESS}
+          SourceArn: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${env:SES_FROM_ADDRESS}'
+        LambdaConfig:
+          # ARN escrito à mão em vez de !GetAtt: a permissão abaixo precisa do ARN do pool,
+          # e referenciar a função aqui fecharia um ciclo no CloudFormation.
+          CustomMessage: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-cognitoCustomMessage'
         Policies:
           PasswordPolicy:
             MinimumLength: 8
@@ -133,6 +166,24 @@ resources:
         ExplicitAuthFlows:
           - ALLOW_ADMIN_USER_PASSWORD_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
+
+    CustomerPoolCustomMessagePermission:
+      Type: AWS::Lambda::Permission
+      DependsOn: CognitoCustomMessageLambdaFunction
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-cognitoCustomMessage'
+        Principal: cognito-idp.amazonaws.com
+        SourceArn: !GetAtt CustomerUserPool.Arn
+
+    RestaurantPoolCustomMessagePermission:
+      Type: AWS::Lambda::Permission
+      DependsOn: CognitoCustomMessageLambdaFunction
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:service}-${sls:stage}-cognitoCustomMessage'
+        Principal: cognito-idp.amazonaws.com
+        SourceArn: !GetAtt RestaurantUserPool.Arn
 
     MediaBucket:
       Type: AWS::S3::Bucket

@@ -70,6 +70,10 @@ Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a l
 - **Restaurant-scoped routes carry the id in the path** (`/restaurants/:restaurantId/...`). A restaurant user can be a member of several restaurants, so the scope cannot come from the user record the way it does in `waitr-api`; `requireMembership` reads the path param, loads the membership and checks `active` and role.
 - **The client never talks to Cognito. The API does (D5).** Sign-up, sign-in and refresh are API routes (`POST /auth/customers/sign-up`, `.../sign-in`, `.../refresh`); the frontends only ever hold tokens the API handed them. Cognito is an implementation detail behind `IAuthGateway`, which is what makes replacing it later a change in one adapter.
 - **Sign-up is a saga.** The account is created in Cognito first, then the local row. If the local write fails, the Cognito account is deleted before the error propagates — otherwise it would be orphaned: able to authenticate, with no row to say who it is, which the auth plugin rejects on every request anyway.
+- **Password recovery is Cognito's, wrapped by our routes (D17).** `POST /auth/{customers,restaurant-users}/forgot-password` calls `ForgotPassword`, and `.../reset-password` calls `ConfirmForgotPassword` with the code and the new password. Cognito owns the code, its one-hour expiry and the attempt limits, so there is no table, no code generation and no hashing here — the same reasoning as D5: the client never talks to Cognito, but Cognito is still the one holding the secret.
+- **Neither recovery route reveals whether an e-mail has an account.** `forgotPassword` swallows `UserNotFoundException`, `resetPassword` answers the same message for a wrong code and an unknown user, and both routes return a fixed string. The rate limit is 5/minute, tighter than sign-in's 10, because the route sends mail to an address the caller chose.
+- **The recovery e-mail is ours, not Cognito's default.** A `CustomMessage` Lambda trigger (`src/lambda/cognito-custom-message.tsx`) renders the react-email template in `src/infra/emails/` and replaces the body. It is attached to both pools, and it is a legal Lambda under the runtime rules because it never touches Postgres. The rendered HTML must keep the literal `{####}` that Cognito substitutes at send time, and must stay under Cognito's 20,000-character limit for `emailMessage` (it currently renders ~3,500).
+- **Cognito sends through SES** (`EmailSendingAccount: DEVELOPER`), which needs `SES_FROM_ADDRESS` verified in the same region *before* the stack is deployed — the pool update fails otherwise. Only the deploy reads that variable; the API itself never sends e-mail and has no SES dependency.
 - **The ID token is verified, not the access token.** It is the one that carries email and name, which the API reads without trusting a request body.
 
 ## 5. Restaurants
@@ -364,6 +368,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D14 | Image variants are served from a public `media/` prefix, not presigned GETs: a menu listing would need one signature per product, and an expiring URL cannot be cached by a CDN (§6.1). |
 | D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
 | D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
+| D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email, delivered by SES (§4). |
 
 ## 14. Open questions
 

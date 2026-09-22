@@ -1,5 +1,9 @@
 import { inject, injectable } from 'tsyringe'
 import type {
+  ICuisineCategory,
+  ICuisinesRepository
+} from '@/application/interfaces/ICuisinesRepository.js'
+import type {
   IOpeningHour,
   IOpeningHoursRepository
 } from '@/application/interfaces/IOpeningHoursRepository.js'
@@ -15,6 +19,7 @@ import { BUSINESS_TIME_ZONE } from '@/domain/time.js'
 export interface IPublicRestaurant extends IRestaurant {
   isOpenNow: boolean
   openingHours: IOpeningHour[]
+  cuisines: ICuisineCategory[]
 }
 
 @injectable()
@@ -23,7 +28,9 @@ export class GetPublicRestaurantUseCase {
     @inject(TOKENS.RestaurantsRepository)
     private readonly restaurants: IRestaurantsRepository,
     @inject(TOKENS.OpeningHoursRepository)
-    private readonly openingHours: IOpeningHoursRepository
+    private readonly openingHours: IOpeningHoursRepository,
+    @inject(TOKENS.CuisinesRepository)
+    private readonly cuisines: ICuisinesRepository
   ) {}
 
   async execute(slug: string): Promise<IPublicRestaurant> {
@@ -33,11 +40,15 @@ export class GetPublicRestaurantUseCase {
       throw new NotFoundError(`Restaurante ${slug} não está ativo.`)
     }
 
-    const openingHours = await this.openingHours.listByRestaurant(restaurant.id)
+    const [openingHours, cuisines] = await Promise.all([
+      this.openingHours.listByRestaurant(restaurant.id),
+      this.cuisines.listByRestaurant(restaurant.id)
+    ])
 
     return {
       ...restaurant,
       openingHours,
+      cuisines,
       isOpenNow: isOpenAt(openingHours, new Date(), BUSINESS_TIME_ZONE)
     }
   }

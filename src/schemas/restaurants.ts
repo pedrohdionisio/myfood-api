@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { IRestaurant } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IPublicRestaurant } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
 import type { IDiscoveredRestaurant } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
+import { ACTIVATION_REQUIREMENTS } from '@/domain/activation.js'
 import { isValidCnpj } from '@/domain/cnpj.js'
 import { RESTAURANT_STATUSES } from '@/domain/enums.js'
 import { buildImageUrls } from '@/domain/images.js'
@@ -59,6 +60,16 @@ export const acceptingOrdersBodySchema = z.object({
   isAcceptingOrders: z.boolean()
 })
 
+export const activationChecklistResponseSchema = z.object({
+  isReadyToActivate: z.boolean(),
+  requirements: z.array(
+    z.object({
+      code: z.enum(ACTIVATION_REQUIREMENTS),
+      isMet: z.boolean()
+    })
+  )
+})
+
 export const restaurantResponseSchema = z.object({
   id: z.uuid(),
   slug: z.string(),
@@ -90,6 +101,10 @@ export const restaurantResponseSchema = z.object({
 
 export const listRestaurantsQuerySchema = z.object({
   addressId: z.uuid().optional(),
+  q: z.string().trim().min(2).max(80).optional(),
+  cuisineSlug: z.string().trim().min(1).max(60).optional(),
+  // Restaurante fechado fica de fora por padrão: a vitrine mostra onde dá para pedir agora.
+  includeClosed: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(50).default(20)
 })
@@ -109,6 +124,13 @@ export const restaurantSummaryResponseSchema = z.object({
   avgPrepTimeMin: z.int(),
   isAcceptingOrders: z.boolean(),
   isOpenNow: z.boolean(),
+  cuisines: z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      slug: z.string()
+    })
+  ),
   ratingAvg: z.number(),
   ratingCount: z.int()
 })
@@ -142,7 +164,8 @@ export function toPublicRestaurantResponse(
   return {
     ...restaurant,
     logoUrls: restaurant.logoKey ? buildImageUrls(mediaBaseUrl, restaurant.logoKey) : null,
-    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null
+    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null,
+    cuisines: restaurant.cuisines.map(({ id, name, slug }) => ({ id, name, slug }))
   }
 }
 
@@ -153,7 +176,8 @@ export function toRestaurantSummaryResponse(
   return {
     ...restaurant,
     logoUrls: restaurant.logoKey ? buildImageUrls(mediaBaseUrl, restaurant.logoKey) : null,
-    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null
+    bannerUrls: restaurant.bannerKey ? buildImageUrls(mediaBaseUrl, restaurant.bannerKey) : null,
+    cuisines: restaurant.cuisines.map(({ id, name, slug }) => ({ id, name, slug }))
   }
 }
 

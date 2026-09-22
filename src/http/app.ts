@@ -90,7 +90,12 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   })
 
   await app.register(helmet, { contentSecurityPolicy: false })
-  await app.register(cors, { origin: true, credentials: true })
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    exposedHeaders: ['x-request-id']
+  })
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
   await registerSwagger(app)

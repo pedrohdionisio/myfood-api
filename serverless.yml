@@ -25,6 +25,12 @@ build:
   esbuild:
     bundle: true
     minify: true
+    # O bundle sai em ESM porque o package.json é type: module, e aí o esbuild troca o require()
+    # de toda dependência CJS por um shim que lança "Dynamic require of X is not supported" — o
+    # pino faz isso e derrubava a Lambda no init. Com um require real no escopo o shim delega a
+    # ele. O alias __cr existe porque o banner entra cru, antes do renomeio do minificador.
+    banner:
+      js: "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);"
     sourcemap:
       type: linked
       setNodeOptions: true

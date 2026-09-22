@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 10 — Online payment. Phases 0–9 are done; Phase 10 is written and waiting on the end-to-end run (see its "Done when").
+**Current phase:** Phase 11 — Notifications and real-time. Phases 0–9 are done. Phase 10 (payments) is written but **unverified**: its end-to-end run is deliberately deferred to the app/dashboard phase.
 
 ---
 
@@ -174,6 +174,10 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `PATCH /restaurants/:restaurantId/status` enforcing the activation checklist (D6), listing
       what is missing on rejection. The body only accepts `ACTIVE`; the checklist dropped the
       address, which no restaurant can be missing (architecture.md §5)
+- [x] `GET /restaurants/:restaurantId/activation-checklist` — not in the original list; the dashboard
+      shows the owner what is still missing *before* they press publish, and the only other source
+      was the 422 from `PATCH .../status`, which means failing on purpose to read `details.missing`.
+      `OWNER` only, like the status route
 - [x] `PATCH /restaurants/:restaurantId/accepting-orders`
 
 **Done when:** an incomplete restaurant is refused `ACTIVE` with the missing items named, and an owner cannot touch a restaurant they are not a member of. ✅
@@ -186,6 +190,10 @@ No business logic. The goal is a repository where the next phase can be written 
 - **Status and `is_accepting_orders` are outside `IUpdateRestaurantData`.** Both have their own
   repository methods, so no future field added to the generic `PATCH` body can move a restaurant
   to `ACTIVE` without the checklist.
+- **One function decides which requirements exist.** `activationRequirementStates` maps the
+  checklist to `{ code, isMet }[]`, and `missingActivationRequirements` filters it. Added when the
+  checklist route needed the met ones too: two functions each listing the requirements would drift,
+  and the drift would show up as a checklist that disagrees with the 422 that refused the publish.
 - **A `sql` template does not qualify column references.** Interpolating `openingHours.restaurantId`
   and `restaurants.id` into a template rendered `where "restaurant_id" = "id"`, which inside the
   subquery compared two columns of `opening_hours` and was silently always false — no error, just a
@@ -258,6 +266,17 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `GET /cuisine-categories` — built in Phase 3, alongside `restaurant_cuisines`
 
 **Done when:** "acai" matches a seeded "Açaí" restaurant, and one seeded in another city does not come back. ✅
+
+### Retrofit — discovery filters (requested by the customer app)
+
+- [x] `GET /discovery/restaurants` accepts `q`, `cuisineSlug` and `includeClosed` (default `false`)
+- [x] The restaurant summary carries `cuisines`, so the app can render category pills and label cards
+- [x] `ListRestaurantsUseCase` reads the whole city before paging, because `isOpenNow` comes from
+      `isOpenAt` (TypeScript domain rule). Paging in SQL would return short pages whenever closed
+      restaurants are hidden. Capped at `MAX_CITY_ROWS = 500` — a city past that loses the tail of
+      the ordering, and the symptom is `hasMore: false` too early. **Revisit when a city gets close.**
+- [ ] `q` still matches restaurant names only. `GET /discovery/search` remains the only way to find a
+      restaurant by the dishes it sells, and the customer app no longer has a screen for it.
 
 ### Notes from Phase 5
 
@@ -457,7 +476,9 @@ reconciliation decision (D16) are what shape everything here.
 - [x] Refund on cancel/reject: the charge goes to `REFUND_PENDING` inside the same transaction
 - [x] `payments` worker: expires charges (**checking the gateway first**), cancels the order, drains refunds
 - [x] `docs/`, `.env.example`, compose service, `pnpm worker:payments`
-- [ ] **End-to-end run** — deferred by the user until the code was in place
+- [ ] **End-to-end run** — deferred until `myfood-app` and `myfood-dashboard` exist, so the flow is
+      exercised through the interfaces instead of through loose requests. **Nothing here has ever
+      run:** what is proven is `lint`, `typecheck`, the API booting and the schema applied.
 
 **Manual setup (the user's side):** account and Dev-mode key → `.env` → an HTTPS tunnel
 (`cloudflared tunnel --url http://localhost:3333`) → webhook registered in the dashboard with the
@@ -506,6 +527,8 @@ Not scheduled. Listed so the deferred verification is not lost, roughly in order
 - [ ] `buildTestApp()` using `app.inject()` — no network port
 - [ ] Fake adapters for the three ports: `TokenVerifier`, `EventPublisher`, `FileStorage`
 - [ ] **Rule 1:** walk the JSON of every restaurant and driver route asserting `deliveryCode` / `delivery_code` is absent
+- [ ] **§12:** an order in `PENDING_PAYMENT` appears in no restaurant route — it leaked once already,
+      because the dashboard queries never had to exclude a status that nothing produced
 - [ ] **Rule 4:** brute-force the delivery code until blocked; two concurrent confirmations → one `DELIVERED`
 - [ ] **D8:** N concurrent checkouts at one restaurant → no `display_number` collision
 - [ ] **D2:** replaying an `Idempotency-Key` returns the original order

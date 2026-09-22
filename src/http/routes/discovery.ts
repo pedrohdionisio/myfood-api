@@ -41,18 +41,22 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
     {
       schema: {
         tags: ['discovery'],
-        summary: 'Restaurantes ativos que atendem a cidade do endereço do cliente',
+        summary:
+          'Restaurantes que atendem a cidade do endereço do cliente, abertos por padrão, com busca e filtro de culinária',
         querystring: listRestaurantsQuerySchema,
         response: { 200: listRestaurantsResponseSchema }
       },
       preHandler: [app.authenticateCustomer]
     },
     async (request) => {
-      const { addressId, page, perPage } = request.query
+      const { addressId, q, cuisineSlug, includeClosed, page, perPage } = request.query
 
       const result = await listRestaurants.execute({
         customerId: requireCustomer(request).id,
         addressId,
+        term: q,
+        cuisineSlug,
+        includeClosed,
         page,
         perPage
       })

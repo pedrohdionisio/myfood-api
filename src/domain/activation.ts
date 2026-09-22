@@ -6,18 +6,24 @@ export interface IActivationChecklist {
   hasAvailableProduct: boolean
 }
 
+export interface IActivationRequirementState {
+  code: ActivationRequirement
+  isMet: boolean
+}
+
+export function activationRequirementStates(
+  checklist: IActivationChecklist
+): IActivationRequirementState[] {
+  return [
+    { code: 'OPENING_HOURS', isMet: checklist.hasOpeningHours },
+    { code: 'AVAILABLE_PRODUCT', isMet: checklist.hasAvailableProduct }
+  ]
+}
+
 export function missingActivationRequirements(
   checklist: IActivationChecklist
 ): ActivationRequirement[] {
-  const missing: ActivationRequirement[] = []
-
-  if (!checklist.hasOpeningHours) {
-    missing.push('OPENING_HOURS')
-  }
-
-  if (!checklist.hasAvailableProduct) {
-    missing.push('AVAILABLE_PRODUCT')
-  }
-
-  return missing
+  return activationRequirementStates(checklist)
+    .filter((requirement) => !requirement.isMet)
+    .map((requirement) => requirement.code)
 }

@@ -70,6 +70,7 @@ import { SetProductAvailabilityUseCase } from '@/application/useCases/products/S
 import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
+import { GetActivationChecklistUseCase } from '@/application/useCases/restaurants/GetActivationChecklistUseCase.js'
 import { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
 import { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
@@ -297,6 +298,12 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.ActivateRestaurantUseCase,
     { useClass: ActivateRestaurantUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.GetActivationChecklistUseCase,
+    { useClass: GetActivationChecklistUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

@@ -10,8 +10,10 @@ import type {
 } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import {
+  cuisineCategories,
   openingHours,
   products,
+  restaurantCuisines,
   restaurantMembers,
   restaurantOrderCounters,
   restaurants
@@ -84,21 +86,48 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
   }
 
   async listActiveByCity(filter: IDiscoveryFilter): Promise<IRestaurant[]> {
-    const { city, state, limit, offset } = filter
+    const { city, state, term, cuisineSlug, limit } = filter
+
+    const conditions = [
+      eq(restaurants.status, 'ACTIVE'),
+      eq(restaurants.state, state),
+      sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`
+    ]
+
+    if (term) {
+      conditions.push(matchesTerm(restaurants.tradeName, term))
+    }
+
+    if (cuisineSlug) {
+      conditions.push(
+        exists(
+          this.database.db
+            .select({ one: sql`1` })
+            .from(restaurantCuisines)
+            .innerJoin(
+              cuisineCategories,
+              eq(cuisineCategories.id, restaurantCuisines.cuisineCategoryId)
+            )
+            .where(
+              and(
+                eq(restaurantCuisines.restaurantId, restaurants.id),
+                eq(cuisineCategories.slug, cuisineSlug)
+              )
+            )
+        )
+      )
+    }
+
+    const ordering = term
+      ? [similarityTo(restaurants.tradeName, term), asc(restaurants.tradeName), asc(restaurants.id)]
+      : [desc(restaurants.ratingAvg), asc(restaurants.tradeName), asc(restaurants.id)]
 
     return this.database.db
       .select(RESTAURANT_COLUMNS)
       .from(restaurants)
-      .where(
-        and(
-          eq(restaurants.status, 'ACTIVE'),
-          eq(restaurants.state, state),
-          sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`
-        )
-      )
-      .orderBy(desc(restaurants.ratingAvg), asc(restaurants.tradeName), asc(restaurants.id))
+      .where(and(...conditions))
+      .orderBy(...ordering)
       .limit(limit)
-      .offset(offset)
   }
 
   async searchInCity(filter: ISearchFilter): Promise<IRestaurant[]> {

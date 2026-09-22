@@ -2,7 +2,8 @@ import { asc, eq, inArray } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   ICuisineCategory,
-  ICuisinesRepository
+  ICuisinesRepository,
+  IRestaurantCuisine
 } from '@/application/interfaces/ICuisinesRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import { cuisineCategories, restaurantCuisines } from '@/db/schema/index.js'
@@ -44,6 +45,19 @@ export class DrizzleCuisinesRepository implements ICuisinesRepository {
       .from(restaurantCuisines)
       .innerJoin(cuisineCategories, eq(cuisineCategories.id, restaurantCuisines.cuisineCategoryId))
       .where(eq(restaurantCuisines.restaurantId, restaurantId))
+      .orderBy(asc(cuisineCategories.position))
+  }
+
+  async listByRestaurants(restaurantIds: string[]): Promise<IRestaurantCuisine[]> {
+    if (restaurantIds.length === 0) {
+      return []
+    }
+
+    return this.database.db
+      .select({ ...CUISINE_COLUMNS, restaurantId: restaurantCuisines.restaurantId })
+      .from(restaurantCuisines)
+      .innerJoin(cuisineCategories, eq(cuisineCategories.id, restaurantCuisines.cuisineCategoryId))
+      .where(inArray(restaurantCuisines.restaurantId, restaurantIds))
       .orderBy(asc(cuisineCategories.position))
   }
 

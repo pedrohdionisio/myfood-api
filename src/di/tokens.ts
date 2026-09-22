@@ -65,6 +65,7 @@ export const TOKENS = {
   GetAnalyticsUseCase: Symbol('GetAnalyticsUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ActivateRestaurantUseCase: Symbol('ActivateRestaurantUseCase'),
+  GetActivationChecklistUseCase: Symbol('GetActivationChecklistUseCase'),
   SetAcceptingOrdersUseCase: Symbol('SetAcceptingOrdersUseCase'),
   ListOpeningHoursUseCase: Symbol('ListOpeningHoursUseCase'),
   ReplaceOpeningHoursUseCase: Symbol('ReplaceOpeningHoursUseCase'),

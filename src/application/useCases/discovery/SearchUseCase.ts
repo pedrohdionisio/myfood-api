@@ -1,4 +1,5 @@
 import { inject, injectable } from 'tsyringe'
+import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
 import type { ICustomerAddressesRepository } from '@/application/interfaces/ICustomerAddressesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type {
@@ -7,8 +8,9 @@ import type {
 } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import { TOKENS } from '@/di/tokens.js'
-import { type IShift, isOpenAt } from '@/domain/opening-hours.js'
+import { isOpenAt } from '@/domain/opening-hours.js'
 import { BUSINESS_TIME_ZONE } from '@/domain/time.js'
+import { groupCuisinesByRestaurant, groupShiftsByRestaurant } from './groupByRestaurant.js'
 import type { IDiscoveredRestaurant } from './ListRestaurantsUseCase.js'
 import { resolveCustomerAddress } from './resolveCustomerAddress.js'
 
@@ -34,7 +36,9 @@ export class SearchUseCase {
     @inject(TOKENS.CustomerAddressesRepository)
     private readonly addresses: ICustomerAddressesRepository,
     @inject(TOKENS.OpeningHoursRepository)
-    private readonly openingHours: IOpeningHoursRepository
+    private readonly openingHours: IOpeningHoursRepository,
+    @inject(TOKENS.CuisinesRepository)
+    private readonly cuisines: ICuisinesRepository
   ) {}
 
   async execute(input: ISearchInput): Promise<ISearchResult> {
@@ -48,22 +52,22 @@ export class SearchUseCase {
       this.products.searchInCity(filter)
     ])
 
-    const shifts = await this.openingHours.listByRestaurants(matched.map((item) => item.id))
-    const shiftsByRestaurant = new Map<string, IShift[]>()
+    const matchedIds = matched.map((item) => item.id)
 
-    for (const shift of shifts) {
-      const list = shiftsByRestaurant.get(shift.restaurantId) ?? []
+    const [shifts, cuisines] = await Promise.all([
+      this.openingHours.listByRestaurants(matchedIds),
+      this.cuisines.listByRestaurants(matchedIds)
+    ])
 
-      list.push(shift)
-      shiftsByRestaurant.set(shift.restaurantId, list)
-    }
-
+    const shiftsByRestaurant = groupShiftsByRestaurant(shifts)
+    const cuisinesByRestaurant = groupCuisinesByRestaurant(cuisines)
     const now = new Date()
 
     return {
       restaurants: matched.map((item) => ({
         ...item,
-        isOpenNow: isOpenAt(shiftsByRestaurant.get(item.id) ?? [], now, BUSINESS_TIME_ZONE)
+        isOpenNow: isOpenAt(shiftsByRestaurant.get(item.id) ?? [], now, BUSINESS_TIME_ZONE),
+        cuisines: cuisinesByRestaurant.get(item.id) ?? []
       })),
       products
     }

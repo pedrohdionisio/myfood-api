@@ -72,8 +72,9 @@ export interface IUpdateRestaurantData {
 export interface IDiscoveryFilter {
   city: string
   state: string
+  term?: string | undefined
+  cuisineSlug?: string | undefined
   limit: number
-  offset: number
 }
 
 export interface ISearchFilter {

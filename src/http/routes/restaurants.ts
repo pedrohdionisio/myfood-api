@@ -1,6 +1,7 @@
 import type { DependencyContainer } from 'tsyringe'
 import type { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import type { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
+import type { GetActivationChecklistUseCase } from '@/application/useCases/restaurants/GetActivationChecklistUseCase.js'
 import type { GetRestaurantUseCase } from '@/application/useCases/restaurants/GetRestaurantUseCase.js'
 import type { SetAcceptingOrdersUseCase } from '@/application/useCases/restaurants/SetAcceptingOrdersUseCase.js'
 import type { UpdateRestaurantUseCase } from '@/application/useCases/restaurants/UpdateRestaurantUseCase.js'
@@ -9,6 +10,7 @@ import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import {
   acceptingOrdersBodySchema,
   activateRestaurantBodySchema,
+  activationChecklistResponseSchema,
   createRestaurantBodySchema,
   restaurantResponseSchema,
   toRestaurantResponse,
@@ -27,6 +29,9 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
   )
   const activateRestaurant = container.resolve<ActivateRestaurantUseCase>(
     TOKENS.ActivateRestaurantUseCase
+  )
+  const getActivationChecklist = container.resolve<GetActivationChecklistUseCase>(
+    TOKENS.GetActivationChecklistUseCase
   )
   const setAcceptingOrders = container.resolve<SetAcceptingOrdersUseCase>(
     TOKENS.SetAcceptingOrdersUseCase
@@ -85,6 +90,20 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
         await updateRestaurant.execute(request.params.restaurantId, request.body),
         mediaBaseUrl
       )
+  )
+
+  app.get(
+    '/restaurants/:restaurantId/activation-checklist',
+    {
+      schema: {
+        tags: ['restaurants'],
+        summary: 'O que ainda falta para o dono publicar o restaurante',
+        params: restaurantScopeParamsSchema,
+        response: { 200: activationChecklistResponseSchema }
+      },
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
+    },
+    async (request) => getActivationChecklist.execute(request.params.restaurantId)
   )
 
   app.patch(

@@ -543,6 +543,11 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 - [x] `push_tokens` registration — `POST /me/push-tokens` and `DELETE /me/push-tokens`, escopadas
       pelo token do cliente
 - [x] Expo push on every status change — **the text never contains the delivery code** (rule 1)
+- [x] Push para o entregador — **adicionado depois da fase**, quando o fluxo do entregador foi para o
+      `myfood-app`. Migration `0013`: `push_tokens` ganha `restaurant_user_id` e o CHECK de dono
+      único; `POST/DELETE /restaurant-users/me/push-tokens`; `driverNotificationFor` avisa o
+      despacho e a entrega frustrada marcada pelo dono. O `IDriverAssignment` sumiu: com
+      `driverMemberId` no `IOrderNotificationTarget` os dois ficaram idênticos
 - [x] `GET /restaurants/:restaurantId/orders/stream` over SSE (D3)
 - [x] `NotifyOrderChangeUseCase`: um único ponto chamado pelas oito transições, que decide o que vai
       para o stream e o que vira push

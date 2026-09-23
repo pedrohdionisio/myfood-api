@@ -6,6 +6,8 @@ import type { IPushTokensRepository } from '@/application/interfaces/IPushTokens
 import { TOKENS } from '@/di/tokens.js'
 import {
   customerNotificationFor,
+  driverNotificationFor,
+  type IOrderNotificationText,
   isVisibleToRestaurant,
   type OrderChange
 } from '@/domain/order-notifications.js'
@@ -41,19 +43,34 @@ export class NotifyOrderChangeUseCase {
       })
     }
 
-    const text = customerNotificationFor({
-      change,
-      actor,
-      status: order.status,
-      displayNumber: order.displayNumber
-    })
+    const context = { change, actor, status: order.status, displayNumber: order.displayNumber }
 
-    if (!text) {
-      return
+    const customerText = customerNotificationFor(context)
+
+    if (customerText) {
+      await this.sendPush(
+        await this.pushTokens.listTokensByCustomer(order.customerId),
+        customerText,
+        order
+      )
     }
 
-    const tokens = await this.pushTokens.listTokensByCustomer(order.customerId)
+    const driverText = driverNotificationFor(context)
 
+    if (driverText && order.driverMemberId) {
+      await this.sendPush(
+        await this.pushTokens.listTokensByMember(order.driverMemberId),
+        driverText,
+        order
+      )
+    }
+  }
+
+  private async sendPush(
+    tokens: string[],
+    text: IOrderNotificationText,
+    order: IOrderNotificationTarget
+  ): Promise<void> {
     if (tokens.length === 0) {
       return
     }

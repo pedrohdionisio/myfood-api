@@ -7,5 +7,6 @@ export const ORDER_NOTIFICATION_COLUMNS = {
   restaurantId: orders.restaurantId,
   customerId: orders.customerId,
   displayNumber: orders.displayNumber,
-  status: orders.status
+  status: orders.status,
+  driverMemberId: orders.driverMemberId
 }

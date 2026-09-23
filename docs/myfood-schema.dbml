@@ -115,7 +115,8 @@ Table customer_addresses {
 
 Table push_tokens {
   id uuid [pk]
-  customer_id uuid [not null, ref: > customers.id]
+  customer_id uuid [ref: > customers.id]
+  restaurant_user_id uuid [ref: > restaurant_users.id]
   token varchar(255) [not null, unique, note: 'Expo push token']
   platform device_platform [not null]
   created_at timestamptz [not null, default: `now()`]
@@ -123,7 +124,10 @@ Table push_tokens {
 
   indexes {
     customer_id
+    restaurant_user_id
   }
+
+  Note: 'Exactly one owner: CHECK num_nonnulls(customer_id, restaurant_user_id) = 1'
 }
 
 // ---------------------------------------------------------------------

@@ -1,9 +1,12 @@
 import { inject, injectable } from 'tsyringe'
-import type { IPushTokensRepository } from '@/application/interfaces/IPushTokensRepository.js'
+import type {
+  IPushTokensRepository,
+  PushTokenOwner
+} from '@/application/interfaces/IPushTokensRepository.js'
 import { TOKENS } from '@/di/tokens.js'
 
 export interface IUnregisterPushTokenInput {
-  customerId: string
+  owner: PushTokenOwner
   token: string
 }
 
@@ -15,6 +18,6 @@ export class UnregisterPushTokenUseCase {
   ) {}
 
   async execute(input: IUnregisterPushTokenInput): Promise<void> {
-    await this.pushTokens.deleteByCustomerAndToken(input.customerId, input.token)
+    await this.pushTokens.deleteByOwnerAndToken(input.owner, input.token)
   }
 }

@@ -5,10 +5,10 @@ import type {
   IConfirmDeliveryData,
   ICreateOrderData,
   ICustomerOrderSummary,
-  IDriverAssignment,
   IDriverDelivery,
   IOrder,
   IOrderItem,
+  IOrderNotificationTarget,
   IOrderPageFilter,
   IOrdersRepository,
   IRestaurantOrder,
@@ -462,9 +462,9 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
     }))
   }
 
-  async findDriverAssignment(orderId: string): Promise<IDriverAssignment | null> {
+  async findDriverAssignment(orderId: string): Promise<IOrderNotificationTarget | null> {
     const [row] = await this.database.db
-      .select({ ...ORDER_NOTIFICATION_COLUMNS, driverMemberId: orders.driverMemberId })
+      .select(ORDER_NOTIFICATION_COLUMNS)
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1)

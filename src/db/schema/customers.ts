@@ -1,16 +1,6 @@
 import { sql } from 'drizzle-orm'
-import {
-  boolean,
-  char,
-  index,
-  pgTable,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar
-} from 'drizzle-orm/pg-core'
+import { boolean, char, index, pgTable, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { primaryId, timestamps } from './columns.js'
-import { devicePlatform } from './enums.js'
 
 export const customers = pgTable('customers', {
   id: primaryId(),
@@ -46,19 +36,4 @@ export const customerAddresses = pgTable(
       .on(table.customerId)
       .where(sql`${table.isDefault}`)
   ]
-)
-
-export const pushTokens = pgTable(
-  'push_tokens',
-  {
-    id: primaryId(),
-    customerId: uuid()
-      .notNull()
-      .references(() => customers.id),
-    token: varchar({ length: 255 }).notNull().unique(),
-    platform: devicePlatform().notNull(),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow()
-  },
-  (table) => [index().on(table.customerId)]
 )

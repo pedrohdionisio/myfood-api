@@ -1,5 +1,5 @@
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
-import type { IDriverAssignment } from '@/application/interfaces/IOrdersRepository.js'
+import type { IOrderNotificationTarget } from '@/application/interfaces/IOrdersRepository.js'
 import { ForbiddenError } from '@/domain/errors.js'
 
 export async function listDriverMemberIds(
@@ -18,7 +18,7 @@ export async function listDriverMemberIds(
 export async function requireAssignedDriverMemberId(
   memberships: IMembershipsRepository,
   userId: string,
-  assignment: IDriverAssignment
+  assignment: IOrderNotificationTarget
 ): Promise<string> {
   const memberIds = await listDriverMemberIds(memberships, userId)
   const assigned = assignment.driverMemberId

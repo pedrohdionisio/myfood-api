@@ -18728,7 +18728,7 @@
         "tags": [
           "push-tokens"
         ],
-        "description": "Idempotente: o app pode chamar a cada abertura. Se o token já existir, passa a pertencer a quem está logado agora.",
+        "description": "Idempotente: o app pode chamar a cada abertura. Se o token já existir, passa a pertencer a quem está logado agora — inclusive quando o aparelho troca de perfil entre cliente e entregador.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18909,11 +18909,11 @@
         }
       },
       "delete": {
-        "summary": "Remove o token de push do aparelho, no logout",
+        "summary": "Remove o token de push do aparelho, no logout do cliente",
         "tags": [
           "push-tokens"
         ],
-        "description": "Sem isto o aparelho continuaria recebendo os pedidos de quem saiu. Token de outro cliente não é apagado.",
+        "description": "Sem isto o aparelho continuaria recebendo os pedidos de quem saiu. Token de outro dono não é apagado.",
         "requestBody": {
           "required": true,
           "content": {
@@ -18937,6 +18937,362 @@
         "security": [
           {
             "customerToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "token"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR)."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições excedido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Limite de requisições excedido."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha inesperada. O requestId da resposta acha a linha no log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Falha inesperada. O requestId da resposta acha a linha no log."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/restaurant-users/me/push-tokens": {
+      "post": {
+        "summary": "Registra o token de push do aparelho para o entregador autenticado",
+        "tags": [
+          "push-tokens"
+        ],
+        "description": "Idempotente: o app pode chamar a cada abertura. Se o token já existir, passa a pertencer a quem está logado agora — inclusive quando o aparelho troca de perfil entre cliente e entregador.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "pattern": "^Expo(nent)?PushToken\\[[^[\\]]+\\]$"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "IOS",
+                      "ANDROID"
+                    ]
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "restaurantToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "IOS",
+                        "ANDROID"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "platform"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR)."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições excedido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Limite de requisições excedido."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha inesperada. O requestId da resposta acha a linha no log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Falha inesperada. O requestId da resposta acha a linha no log."
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove o token de push do aparelho, no logout do entregador",
+        "tags": [
+          "push-tokens"
+        ],
+        "description": "Sem isto o aparelho continuaria recebendo as entregas de quem saiu. Token de outro dono não é apagado.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "pattern": "^Expo(nent)?PushToken\\[[^[\\]]+\\]$"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "restaurantToken": []
           }
         ],
         "responses": {

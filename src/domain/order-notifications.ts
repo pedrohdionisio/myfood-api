@@ -16,7 +16,7 @@ export interface IOrderChangeContext {
   actor: TransitionActor
 }
 
-// Nenhum texto daqui cita o código de entrega, nem quando o pedido sai para entrega (regra 1).
+// Nenhum texto deste arquivo cita o código de entrega, nem quando o pedido sai para entrega (regra 1).
 const TEXT_BY_STATUS: {
   [Status in OrderStatus]?: (displayNumber: number) => IOrderNotificationText
 } = {
@@ -71,6 +71,33 @@ export function customerNotificationFor(
   }
 
   return TEXT_BY_STATUS[context.status]?.(context.displayNumber) ?? null
+}
+
+/**
+ * `null` quando não há o que avisar ao entregador. Ele só fica sabendo do que o afeta sem ter sido
+ * ele a agir: o despacho, que lhe entrega o pedido, e a entrega frustrada marcada pelo dono, que o
+ * tira dele.
+ */
+export function driverNotificationFor(context: IOrderChangeContext): IOrderNotificationText | null {
+  if (context.actor === 'DRIVER') {
+    return null
+  }
+
+  if (context.status === 'OUT_FOR_DELIVERY') {
+    return {
+      title: 'Nova entrega',
+      body: `O pedido #${context.displayNumber} está com você. Abra o app para ver o endereço.`
+    }
+  }
+
+  if (context.status === 'DELIVERY_FAILED') {
+    return {
+      title: 'Entrega encerrada',
+      body: `O restaurante encerrou a entrega do pedido #${context.displayNumber}.`
+    }
+  }
+
+  return null
 }
 
 // Pedido esperando Pix não existe para o restaurante (§12): nem na listagem, nem no stream.

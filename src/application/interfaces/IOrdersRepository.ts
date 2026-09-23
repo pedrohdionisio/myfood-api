@@ -140,9 +140,6 @@ export interface IOrderNotificationTarget {
   customerId: string
   displayNumber: number
   status: OrderStatus
-}
-
-export interface IDriverAssignment extends IOrderNotificationTarget {
   driverMemberId: string | null
 }
 
@@ -187,7 +184,7 @@ export interface IOrdersRepository {
 
   listDeliveriesForMembers(memberIds: string[]): Promise<IDriverDelivery[]>
 
-  findDriverAssignment(orderId: string): Promise<IDriverAssignment | null>
+  findDriverAssignment(orderId: string): Promise<IOrderNotificationTarget | null>
 
   countRecentFailedConfirmations(orderId: string, since: Date): Promise<number>
 

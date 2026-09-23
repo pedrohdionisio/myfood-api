@@ -1,7 +1,11 @@
 import type { DevicePlatform } from '@/domain/enums.js'
 
+export type PushTokenOwner =
+  | { type: 'CUSTOMER'; customerId: string }
+  | { type: 'RESTAURANT_USER'; restaurantUserId: string }
+
 export interface IRegisterPushTokenData {
-  customerId: string
+  owner: PushTokenOwner
   token: string
   platform: DevicePlatform
 }
@@ -12,7 +16,10 @@ export interface IPushTokensRepository {
 
   listTokensByCustomer(customerId: string): Promise<string[]>
 
-  deleteByCustomerAndToken(customerId: string, token: string): Promise<void>
+  /** Resolve o usuário pelo vínculo, porque é o vínculo que o pedido guarda em driver_member_id. */
+  listTokensByMember(memberId: string): Promise<string[]>
+
+  deleteByOwnerAndToken(owner: PushTokenOwner, token: string): Promise<void>
 
   deleteByTokens(tokens: string[]): Promise<void>
 }

@@ -308,6 +308,20 @@ and in-process WebSockets do not survive a move to Lambda.
 - Tokens are registered by the app (`POST /me/push-tokens`) and dropped at logout
   (`DELETE /me/push-tokens`); the token belongs to the device, so registering one that already exists
   moves it to whoever is logged in now. A token Expo reports as `DeviceNotRegistered` is deleted.
+
+**Drivers: Expo push** on the two changes that concern them without their own action: the dispatch
+that hands them an order, and an owner marking `DELIVERY_FAILED`, which takes it away.
+
+- The driver uses the customer app with the restaurant-user pool (the dashboard is owners only). The
+  text comes from `driverNotificationFor`, next to the customer one, under the same rule 1.
+- The recipient is resolved from `orders.driver_member_id` through `restaurant_members.user_id`:
+  tokens belong to the person, not to the membership, since one driver serves several restaurants.
+- Tokens are registered at `POST /restaurant-users/me/push-tokens` and dropped at
+  `DELETE /restaurant-users/me/push-tokens`.
+- `push_tokens` has exactly one owner, a customer **or** a restaurant user (`CHECK
+  push_tokens_single_owner`). One table and not one per pool, because the same device signs in as
+  either profile: registering the token under the other profile moves it and clears the old owner.
+
 - **Push is best effort.** The gateway never rejects: it logs and returns, because the transition is
   already committed and a failed notification must not turn a successful confirmation into a 500.
   The app rereads the order when it opens, so a lost push is never a lost state.

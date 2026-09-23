@@ -206,6 +206,14 @@ Totals sent by the client are never trusted.
 
 A double tap on "place order", or a client retry after a timeout, must not create two orders. Checkout requires an `Idempotency-Key` header holding a UUID generated per checkout attempt. The key is inserted into `idempotency_keys` in the same transaction as the order; a replay of the same key returns the original order instead of creating another.
 
+- The key also stores a SHA-256 of the normalised body (`fingerprintCheckout`, items sorted by
+  product). The same key with a different body is refused with 422 instead of silently returning
+  the first order.
+- A key is valid for 24 hours (`IDEMPOTENCY_KEY_TTL_MS`). An expired key is ignored for replay and
+  deleted when the same value is claimed again, inside the checkout transaction — no cleanup job.
+  Stale rows of keys never reused stay in the table until a purge is worth adding.
+- Keys claimed before migration `0014` have no hash and replay as before.
+
 The same table serves payment webhooks later, when a gateway is chosen.
 
 ### 7.5 Display number

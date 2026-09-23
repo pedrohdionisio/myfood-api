@@ -54,8 +54,17 @@ export interface ICreateOrderItemData {
   notes?: string | undefined
 }
 
+export interface IIdempotentReplay {
+  /** Nulo nas chaves de antes da migration 0014, que não guardavam o corpo. */
+  requestHash: string | null
+  order: IOrder
+}
+
 export interface ICreateOrderData {
   idempotencyKey: string
+  requestHash: string
+  /** Uma chave vencida com o mesmo valor é apagada e reivindicada de novo. */
+  idempotencyClaimedAfter: Date
   customerId: string
   restaurantId: string
   status: OrderStatus
@@ -164,7 +173,11 @@ export interface IChangeOrderStatusData {
 }
 
 export interface IOrdersRepository {
-  findByIdempotencyKey(key: string, customerId: string): Promise<IOrder | null>
+  findIdempotentReplay(
+    key: string,
+    customerId: string,
+    claimedAfter: Date
+  ): Promise<IIdempotentReplay | null>
 
   create(data: ICreateOrderData): Promise<IOrder>
 

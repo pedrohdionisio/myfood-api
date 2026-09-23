@@ -40,6 +40,8 @@ export function registerDeliveryRoutes(app: App, container: DependencyContainer)
         body: confirmDeliveryBodySchema,
         response: { 200: deliveryOutcomeResponseSchema }
       },
+      // Complementa o limite de tentativas por pedido do domínio: este segura quem varre vários.
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
       preHandler: [app.authenticateRestaurantUser]
     },
     async (request) => {

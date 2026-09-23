@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
   IChangeOrderStatusData,
@@ -6,6 +6,7 @@ import type {
   ICreateOrderData,
   ICustomerOrderSummary,
   IDriverDelivery,
+  IIdempotentReplay,
   IOrder,
   IOrderItem,
   IOrderNotificationTarget,
@@ -166,13 +167,23 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       .orderBy(asc(orderItems.id))
   }
 
-  async findByIdempotencyKey(key: string, customerId: string): Promise<IOrder | null> {
+  async findIdempotentReplay(
+    key: string,
+    customerId: string,
+    claimedAfter: Date
+  ): Promise<IIdempotentReplay | null> {
     const db = this.database.db
 
     const [claimed] = await db
-      .select({ orderId: idempotencyKeys.orderId })
+      .select({ orderId: idempotencyKeys.orderId, requestHash: idempotencyKeys.requestHash })
       .from(idempotencyKeys)
-      .where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.customerId, customerId)))
+      .where(
+        and(
+          eq(idempotencyKeys.key, key),
+          eq(idempotencyKeys.customerId, customerId),
+          gte(idempotencyKeys.createdAt, claimedAfter)
+        )
+      )
       .limit(1)
 
     if (!claimed?.orderId) {
@@ -195,16 +206,34 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       .where(eq(orderItems.orderId, row.id))
       .orderBy(asc(orderItems.id))
 
-    return toOrder(row, items)
+    return { requestHash: claimed.requestHash, order: toOrder(row, items) }
   }
 
   async create(data: ICreateOrderData): Promise<IOrder> {
-    const { idempotencyKey, customerId, restaurantId, status, items, ...values } = data
+    const {
+      idempotencyKey,
+      requestHash,
+      idempotencyClaimedAfter,
+      customerId,
+      restaurantId,
+      status,
+      items,
+      ...values
+    } = data
 
     return this.database.db.transaction(async (tx) => {
+      await tx
+        .delete(idempotencyKeys)
+        .where(
+          and(
+            eq(idempotencyKeys.key, idempotencyKey),
+            lt(idempotencyKeys.createdAt, idempotencyClaimedAfter)
+          )
+        )
+
       const claimed = await tx
         .insert(idempotencyKeys)
-        .values({ key: idempotencyKey, customerId })
+        .values({ key: idempotencyKey, customerId, requestHash })
         .onConflictDoNothing()
         .returning({ key: idempotencyKeys.key })
 

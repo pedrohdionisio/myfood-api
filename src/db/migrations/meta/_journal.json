@@ -99,6 +99,13 @@
       "when": 1790167032170,
       "tag": "0013_shallow_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790170752903,
+      "tag": "0014_military_manta",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import { isSameCity } from '@/domain/address.js'
 import { generateDeliveryCode, resolveDeliveryFee } from '@/domain/delivery.js'
 import type { PaymentMethod } from '@/domain/enums.js'
 import { DomainError, NotFoundError } from '@/domain/errors.js'
+import { fingerprintCheckout, idempotencyWindowStart } from '@/domain/idempotency.js'
 import { isOpenAt } from '@/domain/opening-hours.js'
 import { initialOrderStatus } from '@/domain/order-status.js'
 import { calculateLineTotal } from '@/domain/pricing.js'
@@ -54,10 +55,24 @@ export class CreateOrderUseCase {
   ) {}
 
   async execute(input: ICreateOrderInput): Promise<IOrder> {
-    const replayed = await this.orders.findByIdempotencyKey(input.idempotencyKey, input.customerId)
+    const requestHash = fingerprintCheckout(input)
+    const idempotencyClaimedAfter = idempotencyWindowStart(new Date())
 
-    if (replayed) {
-      return replayed
+    const replay = await this.orders.findIdempotentReplay(
+      input.idempotencyKey,
+      input.customerId,
+      idempotencyClaimedAfter
+    )
+
+    if (replay) {
+      if (replay.requestHash !== null && replay.requestHash !== requestHash) {
+        throw new DomainError(
+          `Idempotency-Key ${input.idempotencyKey} reusada com outro corpo de pedido.`,
+          'Este checkout já gerou outro pedido. Volte ao carrinho e tente de novo.'
+        )
+      }
+
+      return replay.order
     }
 
     const restaurant = await this.restaurants.findById(input.restaurantId)
@@ -115,6 +130,8 @@ export class CreateOrderUseCase {
 
     const order = await this.orders.create({
       idempotencyKey: input.idempotencyKey,
+      requestHash,
+      idempotencyClaimedAfter,
       customerId: input.customerId,
       restaurantId: restaurant.id,
       status: initialOrderStatus(input.paymentMethod),

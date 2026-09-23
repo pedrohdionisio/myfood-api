@@ -386,7 +386,8 @@ One transaction:
 - **Checkout recusado não queima a `Idempotency-Key`.** A reivindicação acontece dentro da
   transação, depois de toda validação, então o app corrige o carrinho e repete com a mesma chave.
   Duas lacunas deixadas de propósito: o corpo não é conferido contra a chave (mesma chave com
-  carrinho diferente devolve o pedido original em silêncio) e a chave nunca expira.
+  carrinho diferente devolve o pedido original em silêncio) e a chave nunca expira. **Fechadas
+  na Fase 12.**
 - **A máquina raciocina em papel, não em `ActorType`.** Dono e entregador são os dois
   `RESTAURANT_USER`, mas despachar é do dono e confirmar entrega é do entregador;
   `ACTOR_TYPE_BY_TRANSITION_ACTOR` traduz para o enum que a coluna aceita.
@@ -611,7 +612,11 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
         quando o resto estiver fechado, junto com a publicação
   - [ ] ~~`operationId`s~~ — sem valor por ora: os dois frontends escrevem o cliente à mão, e
         `operationId` só nomeia função gerada. Retomar se um dia gerarem
-- [ ] Rate limits on checkout and delivery confirmation (auth e recuperação de senha já têm)
+- [x] Rate limits on checkout and delivery confirmation — 10/min no `POST /orders` e 20/min no
+      `confirm-delivery`, por IP, somando ao limite de tentativas por pedido do domínio
+- [x] `Idempotency-Key` confere o corpo e vence em 24h — as duas lacunas deixadas na Fase 6.
+      Migration `0014` (`request_hash`); a limpeza de chave vencida é feita ao reivindicá-la de
+      novo, sem job (architecture.md §7.4)
 - [ ] CI: lint e typecheck, e regerar `docs/api/` — precisa de variáveis de ambiente falsas, porque
       `generate-openapi.ts` passa por `config/env.ts`
 - [ ] README covering setup, the `serverless deploy` step and required environment variables

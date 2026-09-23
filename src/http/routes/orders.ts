@@ -44,6 +44,7 @@ export function registerOrderRoutes(app: App, container: DependencyContainer): v
         body: createOrderBodySchema,
         response: { 201: customerOrderResponseSchema }
       },
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       preHandler: [app.authenticateCustomer]
     },
     async (request, reply) => {

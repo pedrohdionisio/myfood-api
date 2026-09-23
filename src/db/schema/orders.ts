@@ -166,6 +166,7 @@ export const idempotencyKeys = pgTable(
       .notNull()
       .references(() => customers.id),
     orderId: uuid().references(() => orders.id),
+    requestHash: char({ length: 64 }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow()
   },
   (table) => [index().on(table.createdAt)]

@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type {
+  ConfirmDeliveryOutcome,
   IChangeOrderStatusData,
   IConfirmDeliveryData,
   ICreateOrderData,
@@ -15,7 +16,7 @@ import type {
   IRestaurantOrder,
   IRestaurantOrderPageFilter
 } from '@/application/interfaces/IOrdersRepository.js'
-import type { IDatabaseConnection } from '@/db/client.js'
+import type { IDatabaseConnection, Transaction } from '@/db/client.js'
 import {
   customers,
   deliveryConfirmationAttempts,
@@ -33,8 +34,6 @@ import type { OrderEventType } from '@/domain/enums.js'
 import { ConflictError } from '@/domain/errors.js'
 import { uuidv7 } from '@/shared/uuid.js'
 import { ORDER_NOTIFICATION_COLUMNS } from './order-notification-columns.js'
-
-type Transaction = Parameters<Parameters<IDatabaseConnection['db']['transaction']>[0]>[0]
 
 const ORDER_COLUMNS = {
   id: orders.id,
@@ -128,14 +127,6 @@ async function enqueueEvent(tx: Transaction, type: OrderEventType, orderId: stri
 export class DrizzleOrdersRepository implements IOrdersRepository {
   constructor(@inject(TOKENS.Database) private readonly database: IDatabaseConnection) {}
 
-  private async selectItems(orderId: string): Promise<IOrderItem[]> {
-    return this.database.db
-      .select(ORDER_ITEM_COLUMNS)
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId))
-      .orderBy(asc(orderItems.id))
-  }
-
   private async selectItemsForOrders(orderIds: string[]): Promise<Map<string, IOrderItem[]>> {
     const grouped = new Map<string, IOrderItem[]>()
 
@@ -159,8 +150,11 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
     return grouped
   }
 
-  private async loadItems(tx: Transaction, orderId: string): Promise<IOrderItem[]> {
-    return tx
+  private async selectItems(
+    executor: IDatabaseConnection['db'] | Transaction,
+    orderId: string
+  ): Promise<IOrderItem[]> {
+    return executor
       .select(ORDER_ITEM_COLUMNS)
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId))
@@ -200,13 +194,10 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       return null
     }
 
-    const items = await db
-      .select(ORDER_ITEM_COLUMNS)
-      .from(orderItems)
-      .where(eq(orderItems.orderId, row.id))
-      .orderBy(asc(orderItems.id))
-
-    return { requestHash: claimed.requestHash, order: toOrder(row, items) }
+    return {
+      requestHash: claimed.requestHash,
+      order: toOrder(row, await this.selectItems(db, row.id))
+    }
   }
 
   async create(data: ICreateOrderData): Promise<IOrder> {
@@ -295,7 +286,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         await enqueueEvent(tx, 'ORDER_CREATED', orderId)
       }
 
-      return toOrder(created, await this.loadItems(tx, orderId))
+      return toOrder(created, await this.selectItems(tx, orderId))
     })
   }
 
@@ -310,7 +301,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       return null
     }
 
-    return toOrder(row, await this.selectItems(orderId))
+    return toOrder(row, await this.selectItems(this.database.db, orderId))
   }
 
   async listByCustomer(
@@ -366,7 +357,11 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
       return null
     }
 
-    return { ...row, ...toTimestamps(row), items: await this.selectItems(orderId) }
+    return {
+      ...row,
+      ...toTimestamps(row),
+      items: await this.selectItems(this.database.db, orderId)
+    }
   }
 
   async listByRestaurant(
@@ -501,25 +496,27 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
     return row ?? null
   }
 
-  async countRecentFailedConfirmations(orderId: string, since: Date): Promise<number> {
-    const [row] = await this.database.db
-      .select({ total: count() })
-      .from(deliveryConfirmationAttempts)
-      .where(
-        and(
-          eq(deliveryConfirmationAttempts.orderId, orderId),
-          eq(deliveryConfirmationAttempts.success, false),
-          gte(deliveryConfirmationAttempts.createdAt, since)
-        )
-      )
-
-    return row?.total ?? 0
-  }
-
-  async confirmDelivery(data: IConfirmDeliveryData): Promise<boolean> {
-    const { orderId, memberId, actorId, code } = data
+  async confirmDelivery(data: IConfirmDeliveryData): Promise<ConfirmDeliveryOutcome> {
+    const { orderId, memberId, actorId, code, failuresSince, maxFailures } = data
 
     return this.database.db.transaction(async (tx) => {
+      await tx.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).for('update')
+
+      const [failures] = await tx
+        .select({ total: count() })
+        .from(deliveryConfirmationAttempts)
+        .where(
+          and(
+            eq(deliveryConfirmationAttempts.orderId, orderId),
+            eq(deliveryConfirmationAttempts.success, false),
+            gte(deliveryConfirmationAttempts.createdAt, failuresSince)
+          )
+        )
+
+      if ((failures?.total ?? 0) >= maxFailures) {
+        return 'BLOCKED'
+      }
+
       const now = new Date()
 
       // Id, status e código no mesmo WHERE: zero linhas é código errado OU status inválido, sem
@@ -552,7 +549,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
         await enqueueEvent(tx, 'ORDER_DELIVERED', orderId)
       }
 
-      return success
+      return success ? 'DELIVERED' : 'WRONG_CODE'
     })
   }
 }

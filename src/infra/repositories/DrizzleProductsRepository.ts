@@ -3,17 +3,14 @@ import { inject, injectable } from 'tsyringe'
 import type {
   ICreateProductData,
   IProduct,
-  IProductSearchHit,
   IProductsRepository,
   IUpdateProductData
 } from '@/application/interfaces/IProductsRepository.js'
-import type { ISearchFilter } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
-import { menuCategories, products, restaurants } from '@/db/schema/index.js'
+import { menuCategories, products } from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
 import { uuidv7 } from '@/shared/uuid.js'
-import { matchesTerm, similarityTo } from './trigram-search.js'
 import { violatesUniqueConstraint } from './unique-violation.js'
 
 const DUPLICATE_NAME = 'products_unique_name_per_category'
@@ -70,37 +67,6 @@ export class DrizzleProductsRepository implements IProductsRepository {
       .orderBy(asc(menuCategories.position), asc(products.position), asc(products.id))
 
     return rows.map(toProduct)
-  }
-
-  async searchInCity(filter: ISearchFilter): Promise<IProductSearchHit[]> {
-    const { term, city, state, limit } = filter
-
-    return this.database.db
-      .select({
-        id: products.id,
-        name: products.name,
-        description: products.description,
-        priceCents: products.priceCents,
-        imageKey: products.imageKey,
-        isAvailable: products.isAvailable,
-        restaurantId: restaurants.id,
-        restaurantSlug: restaurants.slug,
-        restaurantTradeName: restaurants.tradeName,
-        restaurantLogoKey: restaurants.logoKey
-      })
-      .from(products)
-      .innerJoin(restaurants, eq(restaurants.id, products.restaurantId))
-      .where(
-        and(
-          isNull(products.archivedAt),
-          eq(restaurants.status, 'ACTIVE'),
-          eq(restaurants.state, state),
-          sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`,
-          matchesTerm(products.name, term)
-        )
-      )
-      .orderBy(similarityTo(products.name, term), asc(products.name))
-      .limit(limit)
   }
 
   async listByIds(restaurantId: string, ids: string[]): Promise<IProduct[]> {

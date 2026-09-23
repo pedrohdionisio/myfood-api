@@ -101,41 +101,30 @@ describe('discovery', () => {
     expect(response.json().details).toEqual({ reason: 'NO_ADDRESS' })
   })
 
-  it('should search restaurants and products ignoring accents', async () => {
+  it('should search restaurants by name ignoring accents', async () => {
     const customer = await customerInSaoPaulo()
     const acai = await createRestaurant(t.db, { tradeName: 'Açaí da Praça' })
-    const burgers = await createRestaurant(t.db, { tradeName: 'Burger House' })
-    const category = await createCategory(t.db, burgers.id)
-    const product = await createProduct(t.db, burgers.id, category.id, {
-      name: 'Milkshake de açaí'
-    })
-    await createProduct(t.db, burgers.id, category.id, {
-      name: 'Açaí arquivado',
-      archivedAt: new Date()
-    })
+    await createRestaurant(t.db, { tradeName: 'Burger House' })
 
-    const response = await t.request('GET', '/discovery/search', {
+    const response = await t.request('GET', '/discovery/restaurants', {
       token: customer.token,
       query: { q: 'acai' }
     })
 
     expect(response.statusCode).toBe(200)
-    const body = response.json()
-    expect(body.restaurants.map(({ id }: { id: string }) => id)).toEqual([acai.id])
-    expect(body.products.map(({ id }: { id: string }) => id)).toEqual([product.id])
-    expect(body.products[0].restaurant.id).toBe(burgers.id)
+    expect(ids(response)).toEqual([acai.id])
   })
 
   it('should not search outside the customer city', async () => {
     const customer = await customerInSaoPaulo()
     await createRestaurant(t.db, { tradeName: 'Açaí Carioca', city: 'Rio de Janeiro', state: 'RJ' })
 
-    const response = await t.request('GET', '/discovery/search', {
+    const response = await t.request('GET', '/discovery/restaurants', {
       token: customer.token,
       query: { q: 'acai' }
     })
 
-    expect(response.json()).toEqual({ restaurants: [], products: [] })
+    expect(ids(response)).toEqual([])
   })
 
   describe('public pages', () => {

@@ -5,12 +5,10 @@ Backend of MyFood, an iFood-style food delivery platform. Portfolio project buil
 MyFood is split into three independent repositories:
 
 - `myfood-api` (this repo): Fastify REST API
-- `myfood-dashboard`: React web dashboard for restaurant owners and drivers
-- `myfood-app`: React Native (Expo) customer app
+- `myfood-dashboard`: React web dashboard for restaurant owners
+- `myfood-app`: React Native (Expo) app for customers and drivers
 
 Read `docs/architecture.md` before making non-trivial changes. The database schema lives in `docs/myfood-schema.dbml`.
-
-`docs/implementation-plan.md` is the build order. Consult it before starting a phase and update it — checkboxes and the "Current phase" line — at the end of each one.
 
 ## Stack
 
@@ -34,7 +32,7 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 
 ## Workflow
 
-- **Tests are Vitest, in two projects.** `unit` (`tests/unit/`) covers pure domain rules and use cases that only orchestrate external ports; `feature` (`tests/feature/`) drives the real app through `app.inject()` against a real PostGIS started by Testcontainers. Only external services are faked — Postgres never is, because the invariants live in SQL. New behavior gets tests; reuse `tests/support/` (fakes, factories, scenarios) instead of building setup inline. Docker must be running for `pnpm test:feature`.
+- **Tests are Vitest, in two projects.** `unit` (`tests/unit/`) covers pure domain rules and use cases that only orchestrate external ports; `feature` (`tests/feature/`) drives the real app through `app.inject()` against a real Postgres started by Testcontainers. Only external services are faked — Postgres never is, because the invariants live in SQL. New behavior gets tests; reuse `tests/support/` (fakes, factories, scenarios) instead of building setup inline. Docker must be running for `pnpm test:feature`.
 - **After finishing any action or phase, run `pnpm lint && pnpm typecheck && pnpm test`** and report the result.
 - **Almost no comments.** Do not narrate what the code does, and do not write JSDoc as a matter of course. A comment is justified only when the code alone would lead someone to make a wrong change — a non-obvious constraint, or a workaround that looks like a mistake. Explain everything else to the user in conversation instead.
 - **Comments, when they exist, are written in Portuguese.** This is the one exception to the English rule below: identifiers, table and column names, commit messages and documentation stay in English.
@@ -72,12 +70,6 @@ src/
   select columns explicitly so a new column is not leaked by accident.
 - **Errors carry two messages**: `message` is technical and goes to the log; `userMessage` is what
   the app and the dashboard display, and defaults to a generic string.
-
-`waitr-api` (a sibling repository) is a **reference for this style, not a template**. Read it to see
-how a pattern was applied, then decide what this codebase needs: MyFood has two user pools, N-to-N
-restaurant membership, and a delivery code that must never leak — none of which exist there. Copying
-a decision without re-deriving it here is a bug waiting to happen, and so is copying a comment that
-states a fact about that project's infrastructure rather than this one's.
 
 ## Conventions
 

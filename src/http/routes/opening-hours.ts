@@ -26,7 +26,7 @@ export function registerOpeningHoursRoutes(app: App, container: DependencyContai
         params: restaurantScopeParamsSchema,
         response: { 200: openingHoursResponseSchema }
       },
-      preHandler: [app.authenticateRestaurantUser, app.requireMembership()]
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
     },
     async (request) => listOpeningHours.execute(request.params.restaurantId)
   )

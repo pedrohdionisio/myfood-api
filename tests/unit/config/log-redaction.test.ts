@@ -1,6 +1,6 @@
 import { pino } from 'pino'
 import { describe, expect, it } from 'vitest'
-import { REDACTED_PATHS } from '@/http/app.js'
+import { REDACTED_PATHS } from '@/config/logger.js'
 
 function capture() {
   const lines: string[] = []

@@ -4,7 +4,6 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
-  type FastifyServerOptions,
   type RawReplyDefaultExpression,
   type RawRequestDefaultExpression,
   type RawServerDefault
@@ -16,6 +15,7 @@ import {
 } from 'fastify-type-provider-zod'
 import type { DependencyContainer } from 'tsyringe'
 import type { Env } from '@/config/env.js'
+import { buildLoggerOptions } from '@/config/logger.js'
 import { uuidv7 } from '@/shared/uuid.js'
 import { registerErrorHandler } from './error-handler.js'
 import { registerAuth } from './plugins/auth.js'
@@ -48,34 +48,6 @@ export type App = FastifyInstance<
   FastifyBaseLogger,
   ZodTypeProvider
 >
-
-// delivery_code nunca pode ser logado. O Pino não tem wildcard recursivo,
-// então os níveis de aninhamento são escritos um a um.
-export const REDACTED_PATHS = [
-  'req.headers.authorization',
-  'req.headers.cookie',
-  'deliveryCode',
-  'delivery_code',
-  '*.deliveryCode',
-  '*.delivery_code',
-  '*.*.deliveryCode',
-  '*.*.delivery_code'
-]
-
-function buildLoggerOptions(env: Env): NonNullable<FastifyServerOptions['logger']> {
-  return {
-    level: env.LOG_LEVEL,
-    redact: { paths: REDACTED_PATHS, censor: '[REDACTED]' },
-    ...(env.NODE_ENV === 'development'
-      ? {
-          transport: {
-            target: 'pino-pretty',
-            options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' }
-          }
-        }
-      : {})
-  }
-}
 
 export async function buildApp(env: Env, container: DependencyContainer): Promise<App> {
   const app = Fastify({

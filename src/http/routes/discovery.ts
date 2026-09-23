@@ -3,7 +3,6 @@ import type { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetP
 import type { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
 import type { ListPublicReviewsUseCase } from '@/application/useCases/discovery/ListPublicReviewsUseCase.js'
 import type { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
-import type { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import { publicMenuResponseSchema, toPublicMenuResponse } from '@/schemas/menu.js'
@@ -20,7 +19,6 @@ import {
   reviewPageQuerySchema,
   toPublicReviewResponse
 } from '@/schemas/reviews.js'
-import { searchQuerySchema, searchResponseSchema, toProductHitResponse } from '@/schemas/search.js'
 import type { App } from '../app.js'
 import { requireCustomer } from '../plugins/auth.js'
 
@@ -30,7 +28,6 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
     TOKENS.GetPublicRestaurantUseCase
   )
   const getPublicMenu = container.resolve<GetPublicMenuUseCase>(TOKENS.GetPublicMenuUseCase)
-  const search = container.resolve<SearchUseCase>(TOKENS.SearchUseCase)
   const listPublicReviews = container.resolve<ListPublicReviewsUseCase>(
     TOKENS.ListPublicReviewsUseCase
   )
@@ -64,36 +61,6 @@ export function registerDiscoveryRoutes(app: App, container: DependencyContainer
       return {
         ...result,
         items: result.items.map((item) => toRestaurantSummaryResponse(item, mediaBaseUrl))
-      }
-    }
-  )
-
-  app.get(
-    '/discovery/search',
-    {
-      schema: {
-        tags: ['discovery'],
-        summary: 'Busca restaurantes e produtos por nome, na cidade do cliente',
-        querystring: searchQuerySchema,
-        response: { 200: searchResponseSchema }
-      },
-      preHandler: [app.authenticateCustomer]
-    },
-    async (request) => {
-      const { q, addressId, limit } = request.query
-
-      const result = await search.execute({
-        customerId: requireCustomer(request).id,
-        addressId,
-        term: q,
-        limit
-      })
-
-      return {
-        restaurants: result.restaurants.map((item) =>
-          toRestaurantSummaryResponse(item, mediaBaseUrl)
-        ),
-        products: result.products.map((hit) => toProductHitResponse(hit, mediaBaseUrl))
       }
     }
   )

@@ -77,19 +77,10 @@ export interface IDiscoveryFilter {
   limit: number
 }
 
-export interface ISearchFilter {
-  term: string
-  city: string
-  state: string
-  limit: number
-}
-
 export interface IRestaurantsRepository {
   findAvailableSlug(base: string): Promise<string>
 
   listActiveByCity(filter: IDiscoveryFilter): Promise<IRestaurant[]>
-
-  searchInCity(filter: ISearchFilter): Promise<IRestaurant[]>
 
   findById(id: string): Promise<IRestaurant | null>
 

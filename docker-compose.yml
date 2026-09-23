@@ -1,8 +1,30 @@
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  # Traz as variáveis da AWS sem duplicá-las aqui. O bloco environment vence o env_file,
+  # então DATABASE_URL continua apontando para o container do Postgres e não para localhost.
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-environment
+    NODE_ENV: development
+    LOG_LEVEL: debug
+    DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
+  volumes:
+    - .:/app
+    # Preserva o node_modules do container: os binários nativos do host são macOS/arm64
+    # e não rodam no alpine/linux.
+    - /app/node_modules
+    # Sem chaves no .env, o SDK da AWS lê as credenciais do perfil default do host.
+    - ${HOME}/.aws:/root/.aws:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
   postgres:
-    # A imagem oficial postgis/postgis só publica amd64; esta é o mesmo Postgres 16 +
-    # PostGIS 3.5 recompilado multi-arch, necessário no Apple Silicon.
-    image: imresamu/postgis:16-3.5
+    image: postgres:16
     environment:
       POSTGRES_USER: myfood
       POSTGRES_PASSWORD: myfood
@@ -18,97 +40,30 @@ services:
       retries: 10
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    # Traz as variáveis da AWS sem duplicá-las aqui. O bloco environment vence o env_file,
-    # então DATABASE_URL continua apontando para o container do Postgres e não para localhost.
-    env_file:
-      - path: .env
-        required: false
+    <<: *app
     environment:
-      NODE_ENV: development
+      <<: *app-environment
       HOST: 0.0.0.0
       PORT: 3333
-      LOG_LEVEL: debug
-      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
     ports:
       - '3333:3333'
-    volumes:
-      - .:/app
-      # Preserva o node_modules do container: os binários nativos do host são macOS/arm64
-      # e não rodam no alpine/linux.
-      - /app/node_modules
-      # Sem chaves no .env, o SDK da AWS lê as credenciais do perfil default do host.
-      - ${HOME}/.aws:/root/.aws:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   # Drena outbox_events para o SQS. Sem ele o pedido é criado normalmente, mas nenhum
   # agregado se move: o evento fica pendente na tabela até alguém publicar.
   outbox-publisher:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    <<: *app
     command: pnpm worker:outbox
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      NODE_ENV: development
-      LOG_LEVEL: debug
-      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - ${HOME}/.aws:/root/.aws:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   # Consome a fila e escreve os agregados. Idempotente por processed_messages.
   order-events-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    <<: *app
     command: pnpm worker:orders
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      NODE_ENV: development
-      LOG_LEVEL: debug
-      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - ${HOME}/.aws:/root/.aws:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   # Expira Pix vencido (cancelando o pedido) e executa os estornos pendentes. Antes de cancelar,
   # confere a cobrança no gateway: é o que faz o pagamento não depender só do webhook chegar.
   payments-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    <<: *app
     command: pnpm worker:payments
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      NODE_ENV: development
-      LOG_LEVEL: debug
-      DATABASE_URL: postgres://myfood:myfood@postgres:5432/myfood
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - ${HOME}/.aws:/root/.aws:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   pgdata:

@@ -1,51 +1,23 @@
 import 'reflect-metadata'
-import { pino } from 'pino'
 import type { SettlePendingChargesUseCase } from '@/application/useCases/payments/SettlePendingChargesUseCase.js'
 import { env } from '@/config/env.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import { buildContainer } from '@/di/container.js'
 import { TOKENS } from '@/di/tokens.js'
+import { createWorkerLogger, shutdownSignal, sleep } from './runtime.js'
 
 const SWEEP_INTERVAL_MS = 60_000
 
-const logger = pino({
-  level: env.LOG_LEVEL,
-  ...(env.NODE_ENV === 'development'
-    ? {
-        transport: {
-          target: 'pino-pretty',
-          options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' }
-        }
-      }
-    : {})
-}).child({ worker: 'payments' })
+const logger = createWorkerLogger(env, 'payments')
 
 const container = buildContainer(env)
 const settle = container.resolve<SettlePendingChargesUseCase>(TOKENS.SettlePendingChargesUseCase)
 
-const controller = new AbortController()
-
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
-    logger.info({ signal }, 'shutting down')
-    controller.abort()
-  })
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms)
-
-    controller.signal.addEventListener('abort', () => {
-      clearTimeout(timer)
-      resolve()
-    })
-  })
-}
+const signal = shutdownSignal(logger)
 
 logger.info('sweeping expired charges and pending refunds')
 
-while (!controller.signal.aborted) {
+while (!signal.aborted) {
   try {
     const result = await settle.execute({
       onConfirmed: (charge) =>
@@ -71,7 +43,7 @@ while (!controller.signal.aborted) {
     logger.error({ err: error }, 'sweep falhou')
   }
 
-  await sleep(SWEEP_INTERVAL_MS)
+  await sleep(SWEEP_INTERVAL_MS, signal)
 }
 
 await container.resolve<IDatabaseConnection>(TOKENS.Database).close()

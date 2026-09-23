@@ -206,8 +206,26 @@ describe('settlement', () => {
     const result = await settlePendingCharges(t)
 
     expect(result).toMatchObject({ confirmed: 0, expired: 1 })
-    expect(await orderStatus(order.id)).toMatchObject({ status: 'CANCELED' })
+    expect(await orderStatus(order.id)).toEqual({ status: 'CANCELED', paymentStatus: 'FAILED' })
     expect(await outboxTypes(t, order.id)).toEqual([])
+  })
+
+  it('should refund a Pix paid after the charge expired, without reopening the order', async () => {
+    const { order, charge } = await placePixOrder(t, s)
+    await expire(order.id)
+    await settlePendingCharges(t)
+
+    const late = await sendWebhook(t, paidEvent(charge))
+
+    expect(late.statusCode).toBe(200)
+    expect(await chargeStatus(order.id)).toBe('REFUND_PENDING')
+    expect(await orderStatus(order.id)).toMatchObject({ status: 'CANCELED' })
+
+    await settlePendingCharges(t)
+
+    expect(t.fakes.paymentGateway.refunds).toEqual([charge.providerChargeId])
+    expect(await chargeStatus(order.id)).toBe('REFUNDED')
+    expect(await orderStatus(order.id)).toEqual({ status: 'CANCELED', paymentStatus: 'REFUNDED' })
   })
 
   it('should refund a paid order the restaurant rejects', async () => {

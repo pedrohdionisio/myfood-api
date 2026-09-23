@@ -1,24 +1,9 @@
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
-import type { IAnalyticsRepository } from '@/application/interfaces/IAnalyticsRepository.js'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
-import type { ICuisinesRepository } from '@/application/interfaces/ICuisinesRepository.js'
-import type { ICustomerAddressesRepository } from '@/application/interfaces/ICustomerAddressesRepository.js'
-import type { ICustomersRepository } from '@/application/interfaces/ICustomersRepository.js'
 import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
-import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
-import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
-import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
 import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
-import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
-import type { IOutboxRepository } from '@/application/interfaces/IOutboxRepository.js'
 import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
-import type { IPaymentsRepository } from '@/application/interfaces/IPaymentsRepository.js'
-import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IPushGateway } from '@/application/interfaces/IPushGateway.js'
-import type { IPushTokensRepository } from '@/application/interfaces/IPushTokensRepository.js'
-import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
-import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
-import type { IReviewsRepository } from '@/application/interfaces/IReviewsRepository.js'
 import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { GetAnalyticsUseCase } from '@/application/useCases/analytics/GetAnalyticsUseCase.js'
@@ -45,7 +30,6 @@ import { GetPublicMenuUseCase } from '@/application/useCases/discovery/GetPublic
 import { GetPublicRestaurantUseCase } from '@/application/useCases/discovery/GetPublicRestaurantUseCase.js'
 import { ListPublicReviewsUseCase } from '@/application/useCases/discovery/ListPublicReviewsUseCase.js'
 import { ListRestaurantsUseCase } from '@/application/useCases/discovery/ListRestaurantsUseCase.js'
-import { SearchUseCase } from '@/application/useCases/discovery/SearchUseCase.js'
 import { CreateMemberUseCase } from '@/application/useCases/members/CreateMemberUseCase.js'
 import { ListMembersUseCase } from '@/application/useCases/members/ListMembersUseCase.js'
 import { ListMyRestaurantsUseCase } from '@/application/useCases/members/ListMyRestaurantsUseCase.js'
@@ -91,6 +75,7 @@ import { ListRestaurantReviewsUseCase } from '@/application/useCases/reviews/Lis
 import { ReplyToReviewUseCase } from '@/application/useCases/reviews/ReplyToReviewUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
 import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
+import { awsCredentials } from '@/config/aws.js'
 import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
 import { AbacatePayPaymentGateway } from '@/infra/gateways/AbacatePayPaymentGateway.js'
@@ -117,6 +102,90 @@ import { DrizzleReviewsRepository } from '@/infra/repositories/DrizzleReviewsRep
 import { InMemoryOrderStream } from '@/infra/streams/InMemoryOrderStream.js'
 import { TOKENS } from './tokens.js'
 
+const SINGLETONS: [symbol, new (...args: never[]) => unknown][] = [
+  [TOKENS.CustomersRepository, DrizzleCustomersRepository],
+  [TOKENS.CustomerAddressesRepository, DrizzleCustomerAddressesRepository],
+  [TOKENS.RestaurantUsersRepository, DrizzleRestaurantUsersRepository],
+  [TOKENS.MembershipsRepository, DrizzleMembershipsRepository],
+  [TOKENS.RestaurantsRepository, DrizzleRestaurantsRepository],
+  [TOKENS.OpeningHoursRepository, DrizzleOpeningHoursRepository],
+  [TOKENS.CuisinesRepository, DrizzleCuisinesRepository],
+  [TOKENS.SignUpCustomerUseCase, SignUpCustomerUseCase],
+  [TOKENS.SignInCustomerUseCase, SignInCustomerUseCase],
+  [TOKENS.SignUpRestaurantUserUseCase, SignUpRestaurantUserUseCase],
+  [TOKENS.SignInRestaurantUserUseCase, SignInRestaurantUserUseCase],
+  [TOKENS.CreateMemberUseCase, CreateMemberUseCase],
+  [TOKENS.ListMyRestaurantsUseCase, ListMyRestaurantsUseCase],
+  [TOKENS.CreateRestaurantUseCase, CreateRestaurantUseCase],
+  [TOKENS.GetRestaurantUseCase, GetRestaurantUseCase],
+  [TOKENS.ListRestaurantsUseCase, ListRestaurantsUseCase],
+  [TOKENS.GetPublicRestaurantUseCase, GetPublicRestaurantUseCase],
+  [TOKENS.GetPublicMenuUseCase, GetPublicMenuUseCase],
+  [TOKENS.UpdateRestaurantUseCase, UpdateRestaurantUseCase],
+  [TOKENS.ActivateRestaurantUseCase, ActivateRestaurantUseCase],
+  [TOKENS.GetActivationChecklistUseCase, GetActivationChecklistUseCase],
+  [TOKENS.SetAcceptingOrdersUseCase, SetAcceptingOrdersUseCase],
+  [TOKENS.UpdateCustomerProfileUseCase, UpdateCustomerProfileUseCase],
+  [TOKENS.UpdateRestaurantUserProfileUseCase, UpdateRestaurantUserProfileUseCase],
+  [TOKENS.ListOpeningHoursUseCase, ListOpeningHoursUseCase],
+  [TOKENS.ReplaceOpeningHoursUseCase, ReplaceOpeningHoursUseCase],
+  [TOKENS.ListCuisineCategoriesUseCase, ListCuisineCategoriesUseCase],
+  [TOKENS.ListRestaurantCuisinesUseCase, ListRestaurantCuisinesUseCase],
+  [TOKENS.ReplaceRestaurantCuisinesUseCase, ReplaceRestaurantCuisinesUseCase],
+  [TOKENS.MenuCategoriesRepository, DrizzleMenuCategoriesRepository],
+  [TOKENS.ListMenuCategoriesUseCase, ListMenuCategoriesUseCase],
+  [TOKENS.CreateMenuCategoryUseCase, CreateMenuCategoryUseCase],
+  [TOKENS.UpdateMenuCategoryUseCase, UpdateMenuCategoryUseCase],
+  [TOKENS.ArchiveMenuCategoryUseCase, ArchiveMenuCategoryUseCase],
+  [TOKENS.ReorderMenuCategoriesUseCase, ReorderMenuCategoriesUseCase],
+  [TOKENS.ProductsRepository, DrizzleProductsRepository],
+  [TOKENS.ListProductsUseCase, ListProductsUseCase],
+  [TOKENS.CreateProductUseCase, CreateProductUseCase],
+  [TOKENS.UpdateProductUseCase, UpdateProductUseCase],
+  [TOKENS.SetProductAvailabilityUseCase, SetProductAvailabilityUseCase],
+  [TOKENS.ReorderProductsUseCase, ReorderProductsUseCase],
+  [TOKENS.ArchiveProductUseCase, ArchiveProductUseCase],
+  [TOKENS.ListCustomerAddressesUseCase, ListCustomerAddressesUseCase],
+  [TOKENS.CreateCustomerAddressUseCase, CreateCustomerAddressUseCase],
+  [TOKENS.UpdateCustomerAddressUseCase, UpdateCustomerAddressUseCase],
+  [TOKENS.SetDefaultCustomerAddressUseCase, SetDefaultCustomerAddressUseCase],
+  [TOKENS.DeleteCustomerAddressUseCase, DeleteCustomerAddressUseCase],
+  [TOKENS.PushTokensRepository, DrizzlePushTokensRepository],
+  [TOKENS.NotifyOrderChangeUseCase, NotifyOrderChangeUseCase],
+  [TOKENS.RegisterPushTokenUseCase, RegisterPushTokenUseCase],
+  [TOKENS.UnregisterPushTokenUseCase, UnregisterPushTokenUseCase],
+  [TOKENS.OrdersRepository, DrizzleOrdersRepository],
+  [TOKENS.PaymentsRepository, DrizzlePaymentsRepository],
+  [TOKENS.CreateOrderUseCase, CreateOrderUseCase],
+  [TOKENS.ListCustomerOrdersUseCase, ListCustomerOrdersUseCase],
+  [TOKENS.GetCustomerOrderUseCase, GetCustomerOrderUseCase],
+  [TOKENS.CancelOrderUseCase, CancelOrderUseCase],
+  [TOKENS.CreatePixPaymentUseCase, CreatePixPaymentUseCase],
+  [TOKENS.GetOrderPaymentUseCase, GetOrderPaymentUseCase],
+  [TOKENS.ProcessPaymentWebhookUseCase, ProcessPaymentWebhookUseCase],
+  [TOKENS.SettlePendingChargesUseCase, SettlePendingChargesUseCase],
+  [TOKENS.ListRestaurantOrdersUseCase, ListRestaurantOrdersUseCase],
+  [TOKENS.ChangeOrderStatusUseCase, ChangeOrderStatusUseCase],
+  [TOKENS.DispatchOrderUseCase, DispatchOrderUseCase],
+  [TOKENS.ListMembersUseCase, ListMembersUseCase],
+  [TOKENS.UpdateMemberUseCase, UpdateMemberUseCase],
+  [TOKENS.ListMyDeliveriesUseCase, ListMyDeliveriesUseCase],
+  [TOKENS.ConfirmDeliveryUseCase, ConfirmDeliveryUseCase],
+  [TOKENS.FailDeliveryUseCase, FailDeliveryUseCase],
+  [TOKENS.ReviewsRepository, DrizzleReviewsRepository],
+  [TOKENS.CreateReviewUseCase, CreateReviewUseCase],
+  [TOKENS.GetOrderReviewUseCase, GetOrderReviewUseCase],
+  [TOKENS.ReplyToReviewUseCase, ReplyToReviewUseCase],
+  [TOKENS.ListRestaurantReviewsUseCase, ListRestaurantReviewsUseCase],
+  [TOKENS.ListPublicReviewsUseCase, ListPublicReviewsUseCase],
+  [TOKENS.OutboxRepository, DrizzleOutboxRepository],
+  [TOKENS.AnalyticsRepository, DrizzleAnalyticsRepository],
+  [TOKENS.ProcessOrderEventUseCase, ProcessOrderEventUseCase],
+  [TOKENS.GetAnalyticsUseCase, GetAnalyticsUseCase],
+  [TOKENS.CreateImageUploadUseCase, CreateImageUploadUseCase],
+  [TOKENS.ProcessImageVariantsUseCase, ProcessImageVariantsUseCase]
+]
+
 export interface IAdapters {
   customerTokenVerifier: ITokenVerifier
   restaurantTokenVerifier: ITokenVerifier
@@ -129,10 +198,7 @@ export interface IAdapters {
 }
 
 export function buildAdapters(env: Env): IAdapters {
-  const credentials =
-    env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
-      ? { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY }
-      : undefined
+  const credentials = awsCredentials(env)
 
   return {
     // Dois pools, dois verificadores. Um token do app de cliente não passa no verificador do
@@ -204,60 +270,6 @@ export function buildContainer(
   // Num worker ele existe e não tem ouvintes — o dashboard vê aquela mudança no próximo refetch.
   container.register<IOrderStream>(TOKENS.OrderStream, { useValue: new InMemoryOrderStream() })
 
-  container.register<ICustomersRepository>(
-    TOKENS.CustomersRepository,
-    { useClass: DrizzleCustomersRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<ICustomerAddressesRepository>(
-    TOKENS.CustomerAddressesRepository,
-    { useClass: DrizzleCustomerAddressesRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IRestaurantUsersRepository>(
-    TOKENS.RestaurantUsersRepository,
-    { useClass: DrizzleRestaurantUsersRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IMembershipsRepository>(
-    TOKENS.MembershipsRepository,
-    { useClass: DrizzleMembershipsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IRestaurantsRepository>(
-    TOKENS.RestaurantsRepository,
-    { useClass: DrizzleRestaurantsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IOpeningHoursRepository>(
-    TOKENS.OpeningHoursRepository,
-    { useClass: DrizzleOpeningHoursRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<ICuisinesRepository>(
-    TOKENS.CuisinesRepository,
-    { useClass: DrizzleCuisinesRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SignUpCustomerUseCase,
-    { useClass: SignUpCustomerUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SignInCustomerUseCase,
-    { useClass: SignInCustomerUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
   container.register(TOKENS.RefreshCustomerSessionUseCase, {
     useValue: new RefreshSessionUseCase(customerAuthGateway)
   })
@@ -282,443 +294,9 @@ export function buildContainer(
     useValue: new ResetPasswordUseCase(restaurantAuthGateway)
   })
 
-  container.register(
-    TOKENS.SignUpRestaurantUserUseCase,
-    { useClass: SignUpRestaurantUserUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SignInRestaurantUserUseCase,
-    { useClass: SignInRestaurantUserUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateMemberUseCase,
-    { useClass: CreateMemberUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListMyRestaurantsUseCase,
-    { useClass: ListMyRestaurantsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateRestaurantUseCase,
-    { useClass: CreateRestaurantUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetRestaurantUseCase,
-    { useClass: GetRestaurantUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListRestaurantsUseCase,
-    { useClass: ListRestaurantsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetPublicRestaurantUseCase,
-    { useClass: GetPublicRestaurantUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetPublicMenuUseCase,
-    { useClass: GetPublicMenuUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SearchUseCase,
-    { useClass: SearchUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateRestaurantUseCase,
-    { useClass: UpdateRestaurantUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ActivateRestaurantUseCase,
-    { useClass: ActivateRestaurantUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetActivationChecklistUseCase,
-    { useClass: GetActivationChecklistUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SetAcceptingOrdersUseCase,
-    { useClass: SetAcceptingOrdersUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateCustomerProfileUseCase,
-    { useClass: UpdateCustomerProfileUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateRestaurantUserProfileUseCase,
-    { useClass: UpdateRestaurantUserProfileUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListOpeningHoursUseCase,
-    { useClass: ListOpeningHoursUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ReplaceOpeningHoursUseCase,
-    { useClass: ReplaceOpeningHoursUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListCuisineCategoriesUseCase,
-    { useClass: ListCuisineCategoriesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListRestaurantCuisinesUseCase,
-    { useClass: ListRestaurantCuisinesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ReplaceRestaurantCuisinesUseCase,
-    { useClass: ReplaceRestaurantCuisinesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IMenuCategoriesRepository>(
-    TOKENS.MenuCategoriesRepository,
-    { useClass: DrizzleMenuCategoriesRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListMenuCategoriesUseCase,
-    { useClass: ListMenuCategoriesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateMenuCategoryUseCase,
-    { useClass: CreateMenuCategoryUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateMenuCategoryUseCase,
-    { useClass: UpdateMenuCategoryUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ArchiveMenuCategoryUseCase,
-    { useClass: ArchiveMenuCategoryUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ReorderMenuCategoriesUseCase,
-    { useClass: ReorderMenuCategoriesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IProductsRepository>(
-    TOKENS.ProductsRepository,
-    { useClass: DrizzleProductsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListProductsUseCase,
-    { useClass: ListProductsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateProductUseCase,
-    { useClass: CreateProductUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateProductUseCase,
-    { useClass: UpdateProductUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SetProductAvailabilityUseCase,
-    { useClass: SetProductAvailabilityUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ReorderProductsUseCase,
-    { useClass: ReorderProductsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ArchiveProductUseCase,
-    { useClass: ArchiveProductUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListCustomerAddressesUseCase,
-    { useClass: ListCustomerAddressesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateCustomerAddressUseCase,
-    { useClass: CreateCustomerAddressUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateCustomerAddressUseCase,
-    { useClass: UpdateCustomerAddressUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SetDefaultCustomerAddressUseCase,
-    { useClass: SetDefaultCustomerAddressUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.DeleteCustomerAddressUseCase,
-    { useClass: DeleteCustomerAddressUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IPushTokensRepository>(
-    TOKENS.PushTokensRepository,
-    { useClass: DrizzlePushTokensRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.NotifyOrderChangeUseCase,
-    { useClass: NotifyOrderChangeUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.RegisterPushTokenUseCase,
-    { useClass: RegisterPushTokenUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UnregisterPushTokenUseCase,
-    { useClass: UnregisterPushTokenUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IOrdersRepository>(
-    TOKENS.OrdersRepository,
-    { useClass: DrizzleOrdersRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IPaymentsRepository>(
-    TOKENS.PaymentsRepository,
-    { useClass: DrizzlePaymentsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateOrderUseCase,
-    { useClass: CreateOrderUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListCustomerOrdersUseCase,
-    { useClass: ListCustomerOrdersUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetCustomerOrderUseCase,
-    { useClass: GetCustomerOrderUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CancelOrderUseCase,
-    { useClass: CancelOrderUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreatePixPaymentUseCase,
-    { useClass: CreatePixPaymentUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetOrderPaymentUseCase,
-    { useClass: GetOrderPaymentUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ProcessPaymentWebhookUseCase,
-    { useClass: ProcessPaymentWebhookUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.SettlePendingChargesUseCase,
-    { useClass: SettlePendingChargesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListRestaurantOrdersUseCase,
-    { useClass: ListRestaurantOrdersUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ChangeOrderStatusUseCase,
-    { useClass: ChangeOrderStatusUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.DispatchOrderUseCase,
-    { useClass: DispatchOrderUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListMembersUseCase,
-    { useClass: ListMembersUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.UpdateMemberUseCase,
-    { useClass: UpdateMemberUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListMyDeliveriesUseCase,
-    { useClass: ListMyDeliveriesUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ConfirmDeliveryUseCase,
-    { useClass: ConfirmDeliveryUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.FailDeliveryUseCase,
-    { useClass: FailDeliveryUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IReviewsRepository>(
-    TOKENS.ReviewsRepository,
-    { useClass: DrizzleReviewsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateReviewUseCase,
-    { useClass: CreateReviewUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetOrderReviewUseCase,
-    { useClass: GetOrderReviewUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ReplyToReviewUseCase,
-    { useClass: ReplyToReviewUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListRestaurantReviewsUseCase,
-    { useClass: ListRestaurantReviewsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ListPublicReviewsUseCase,
-    { useClass: ListPublicReviewsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IOutboxRepository>(
-    TOKENS.OutboxRepository,
-    { useClass: DrizzleOutboxRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register<IAnalyticsRepository>(
-    TOKENS.AnalyticsRepository,
-    { useClass: DrizzleAnalyticsRepository },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ProcessOrderEventUseCase,
-    { useClass: ProcessOrderEventUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.GetAnalyticsUseCase,
-    { useClass: GetAnalyticsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.CreateImageUploadUseCase,
-    { useClass: CreateImageUploadUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
-
-  container.register(
-    TOKENS.ProcessImageVariantsUseCase,
-    { useClass: ProcessImageVariantsUseCase },
-    { lifecycle: Lifecycle.Singleton }
-  )
+  for (const [token, implementation] of SINGLETONS) {
+    container.register(token, { useClass: implementation }, { lifecycle: Lifecycle.Singleton })
+  }
 
   return container
 }

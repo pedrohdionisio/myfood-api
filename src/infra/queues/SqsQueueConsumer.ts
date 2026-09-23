@@ -1,9 +1,5 @@
 import { DeleteMessageCommand, ReceiveMessageCommand, SQSClient } from '@aws-sdk/client-sqs'
-
-export interface ISqsCredentials {
-  accessKeyId: string
-  secretAccessKey: string
-}
+import type { IAwsCredentials } from '@/config/aws.js'
 
 export interface IConsumeParams {
   handler: (body: string) => Promise<void>
@@ -20,7 +16,7 @@ export class SqsQueueConsumer {
   constructor(
     private readonly queueUrl: string,
     region: string,
-    credentials?: ISqsCredentials
+    credentials?: IAwsCredentials
   ) {
     this.client = new SQSClient({ region, ...(credentials ? { credentials } : {}) })
   }

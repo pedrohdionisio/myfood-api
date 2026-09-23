@@ -5,7 +5,6 @@ import type {
   IDiscoveryFilter,
   IRestaurant,
   IRestaurantsRepository,
-  ISearchFilter,
   IUpdateRestaurantData
 } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
@@ -127,24 +126,6 @@ export class DrizzleRestaurantsRepository implements IRestaurantsRepository {
       .from(restaurants)
       .where(and(...conditions))
       .orderBy(...ordering)
-      .limit(limit)
-  }
-
-  async searchInCity(filter: ISearchFilter): Promise<IRestaurant[]> {
-    const { term, city, state, limit } = filter
-
-    return this.database.db
-      .select(RESTAURANT_COLUMNS)
-      .from(restaurants)
-      .where(
-        and(
-          eq(restaurants.status, 'ACTIVE'),
-          eq(restaurants.state, state),
-          sql`immutable_unaccent(lower(${restaurants.city})) = immutable_unaccent(lower(${city}))`,
-          matchesTerm(restaurants.tradeName, term)
-        )
-      )
-      .orderBy(similarityTo(restaurants.tradeName, term), asc(restaurants.tradeName))
       .limit(limit)
   }
 

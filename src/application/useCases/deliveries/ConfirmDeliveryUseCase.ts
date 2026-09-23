@@ -35,24 +35,23 @@ export class ConfirmDeliveryUseCase {
 
     const memberId = await requireAssignedDriverMemberId(this.memberships, userId, assignment)
 
-    const since = new Date(Date.now() - CONFIRMATION_WINDOW_MINUTES * 60_000)
-    const failures = await this.orders.countRecentFailedConfirmations(orderId, since)
+    const outcome = await this.orders.confirmDelivery({
+      orderId,
+      memberId,
+      actorId: userId,
+      code,
+      failuresSince: new Date(Date.now() - CONFIRMATION_WINDOW_MINUTES * 60_000),
+      maxFailures: MAX_FAILED_CONFIRMATIONS
+    })
 
-    if (failures >= MAX_FAILED_CONFIRMATIONS) {
+    if (outcome === 'BLOCKED') {
       throw new TooManyRequestsError(
-        `Pedido ${orderId} teve ${failures} tentativas falhas em ${CONFIRMATION_WINDOW_MINUTES} minutos.`,
+        `Pedido ${orderId} atingiu ${MAX_FAILED_CONFIRMATIONS} tentativas falhas em ${CONFIRMATION_WINDOW_MINUTES} minutos.`,
         'Muitas tentativas erradas. Aguarde alguns minutos e confirme de novo.'
       )
     }
 
-    const confirmed = await this.orders.confirmDelivery({
-      orderId,
-      memberId,
-      actorId: userId,
-      code
-    })
-
-    if (!confirmed) {
+    if (outcome === 'WRONG_CODE') {
       throw new DomainError(
         `Confirmação recusada no pedido ${orderId}: código errado ou status diferente de OUT_FOR_DELIVERY.`,
         'Código incorreto. Confira com o cliente e tente novamente.'

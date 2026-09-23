@@ -59,6 +59,7 @@ export interface IPaymentsRepository {
    * Marca a cobrança como paga e leva o pedido de PENDING_PAYMENT para PENDING, com histórico e
    * evento de outbox, tudo na mesma transação. Devolve o pedido afetado, para a notificação, ou
    * `null` quando nada foi aplicado — evento repetido, cobrança já paga ou pedido fora do estado.
+   * Pagamento de cobrança já expirada não reabre o pedido: vai para REFUND_PENDING.
    */
   confirm(data: IConfirmPaymentData): Promise<IOrderNotificationTarget | null>
 
@@ -69,7 +70,7 @@ export interface IPaymentsRepository {
 
   listAwaitingRefund(limit: number): Promise<IPendingCharge[]>
 
-  /** Expira a cobrança e cancela o pedido que ainda estiver em PENDING_PAYMENT. */
+  /** Expira a cobrança e cancela, com pagamento FAILED, o pedido ainda em PENDING_PAYMENT. */
   expire(chargeId: string): Promise<IOrderNotificationTarget | null>
 
   markRefunded(chargeId: string): Promise<void>

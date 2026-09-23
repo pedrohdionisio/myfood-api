@@ -15,7 +15,7 @@ declare module 'vitest' {
 }
 
 export default async function setup(project: TestProject) {
-  const container = await new PostgreSqlContainer('imresamu/postgis:16-3.5')
+  const container = await new PostgreSqlContainer('postgres:16')
     .withDatabase('postgres')
     .withUsername('myfood')
     .withPassword('myfood')

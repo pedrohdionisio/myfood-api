@@ -7,7 +7,7 @@ import type {
   IProductSale
 } from '@/application/interfaces/IAnalyticsRepository.js'
 import type { IOutboxEvent } from '@/application/interfaces/IEventPublisher.js'
-import type { IDatabaseConnection } from '@/db/client.js'
+import type { IDatabaseConnection, Transaction } from '@/db/client.js'
 import {
   orderItems,
   orders,
@@ -20,8 +20,6 @@ import { TOKENS } from '@/di/tokens.js'
 import { toBusinessDate } from '@/domain/time.js'
 
 const CONSUMER = 'order-events'
-
-type Transaction = Parameters<Parameters<IDatabaseConnection['db']['transaction']>[0]>[0]
 
 interface IStatIncrement {
   ordersCount?: number

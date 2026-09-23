@@ -11,9 +11,9 @@ export function withDatabase(url: string, database: string): string {
   return parsed.toString()
 }
 
-// cuisine_categories vem populada pela migration 0007 e spatial_ref_sys é do PostGIS: limpar as
-// duas faria os testes rodarem num banco diferente do que as migrations entregam.
-const PRESERVED_TABLES = ['cuisine_categories', 'spatial_ref_sys']
+// cuisine_categories vem populada pela migration 0007: limpá-la faria os testes rodarem num banco
+// diferente do que as migrations entregam.
+const PRESERVED_TABLES = ['cuisine_categories']
 
 export async function truncateAll(database: IDatabaseConnection): Promise<void> {
   const rows = await database.db.execute<{ tablename: string }>(sql`

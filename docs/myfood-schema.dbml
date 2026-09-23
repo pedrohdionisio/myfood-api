@@ -7,7 +7,7 @@
 Project myfood {
   database_type: 'PostgreSQL'
   Note: '''
-  MVP sem complementos (option groups). Pagamentos online pendentes da escolha do gateway.
+  MVP sem complementos (option groups). Pagamento online por Pix via AbacatePay.
   Sem geolocalização (D13): entrega definida por cidade, taxa fixa por restaurante.
   '''
 }
@@ -63,6 +63,12 @@ Enum payment_charge_status {
   REFUND_PENDING
   REFUNDED
   FAILED
+}
+
+Enum order_event_type {
+  ORDER_CREATED
+  ORDER_DELIVERED
+  ORDER_CANCELED
 }
 
 Enum actor_type {
@@ -274,8 +280,6 @@ Table products {
   indexes {
     (restaurant_id, menu_category_id, position)
   }
-
-  Note: 'Migration: GIN (name gin_trgm_ops) para busca'
 }
 
 // ---------------------------------------------------------------------
@@ -459,6 +463,21 @@ Table processed_messages {
   message_id varchar(128) [pk, note: 'Idempotência dos consumers SQS']
   consumer varchar(60) [not null]
   processed_at timestamptz [not null, default: `now()`]
+}
+
+Table outbox_events {
+  id uuid [pk, note: 'Vira o message_id no SQS']
+  type order_event_type [not null]
+  order_id uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  published_at timestamptz [note: 'Nulo enquanto o worker não publicou']
+  attempts integer [not null, default: 0]
+
+  indexes {
+    created_at [name: 'outbox_events_pending', note: 'Parcial: WHERE published_at IS NULL']
+  }
+
+  Note: 'Gravado na mesma transação da mudança do pedido; o outbox-publisher envia ao SQS.'
 }
 
 // ---------------------------------------------------------------------

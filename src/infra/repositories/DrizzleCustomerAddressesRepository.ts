@@ -6,7 +6,7 @@ import type {
   ICustomerAddressesRepository,
   IUpdateCustomerAddressData
 } from '@/application/interfaces/ICustomerAddressesRepository.js'
-import type { IDatabaseConnection } from '@/db/client.js'
+import type { IDatabaseConnection, Transaction } from '@/db/client.js'
 import { customerAddresses, customers } from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
 import { NotFoundError } from '@/domain/errors.js'
@@ -25,8 +25,6 @@ const CUSTOMER_ADDRESS_COLUMNS = {
   reference: customerAddresses.reference,
   isDefault: customerAddresses.isDefault
 }
-
-type Transaction = Parameters<Parameters<IDatabaseConnection['db']['transaction']>[0]>[0]
 
 async function lockCustomer(tx: Transaction, customerId: string): Promise<void> {
   const [row] = await tx

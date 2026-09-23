@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { orders } from '@/db/schema/index.js'
+import { deliveryConfirmationAttempts, orders } from '@/db/schema/index.js'
+import { MAX_FAILED_CONFIRMATIONS } from '@/domain/delivery.js'
 import { uuidv7 } from '@/shared/uuid.js'
 import { setupTestApp } from '../../support/app.js'
 import {
@@ -60,6 +61,27 @@ describe('concurrency', () => {
       ({ toStatus }) => toStatus === 'DELIVERED'
     )
     expect(delivered).toHaveLength(1)
+  })
+
+  it('should not let parallel wrong codes get past the attempt limit (rule 4)', async () => {
+    const s = await createOrderingScenario(t)
+    const order = await placeOrder(t, s)
+    await advanceOrderTo(t, s, order.id, 'OUT_FOR_DELIVERY')
+    const wrong = order.deliveryCode === '0000' ? '1111' : '0000'
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () => confirmDelivery(t, s, order.id, wrong))
+    )
+
+    expect(statusCodes(responses)).toEqual([
+      ...Array(MAX_FAILED_CONFIRMATIONS).fill(422),
+      ...Array(10 - MAX_FAILED_CONFIRMATIONS).fill(429)
+    ])
+    const attempts = await t.db
+      .select()
+      .from(deliveryConfirmationAttempts)
+      .where(eq(deliveryConfirmationAttempts.orderId, order.id))
+    expect(attempts).toHaveLength(MAX_FAILED_CONFIRMATIONS)
   })
 
   it('should let only one of a customer cancel and an owner confirm win (rule 3)', async () => {

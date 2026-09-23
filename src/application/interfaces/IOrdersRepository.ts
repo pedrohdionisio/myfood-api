@@ -159,7 +159,11 @@ export interface IConfirmDeliveryData {
   /** Usuário do entregador: é o que order_status_history grava, como nas outras transições. */
   actorId: string
   code: string
+  failuresSince: Date
+  maxFailures: number
 }
+
+export type ConfirmDeliveryOutcome = 'DELIVERED' | 'WRONG_CODE' | 'BLOCKED'
 
 export interface IChangeOrderStatusData {
   orderId: string
@@ -199,12 +203,10 @@ export interface IOrdersRepository {
 
   findDriverAssignment(orderId: string): Promise<IOrderNotificationTarget | null>
 
-  countRecentFailedConfirmations(orderId: string, since: Date): Promise<number>
-
   /**
-   * UPDATE condicional único casando id, status e código, com a tentativa gravada tanto no
-   * acerto quanto no erro — por isso devolve boolean em vez de lançar: lançar dentro da
-   * transação desfaria o registro da tentativa (regra 4).
+   * Conta as falhas recentes e tenta o UPDATE condicional na mesma transação, com o pedido
+   * travado: contar antes, fora dela, deixava requisições paralelas passarem todas pelo limite.
+   * Devolve o desfecho em vez de lançar, porque lançar desfaria o registro da tentativa (regra 4).
    */
-  confirmDelivery(data: IConfirmDeliveryData): Promise<boolean>
+  confirmDelivery(data: IConfirmDeliveryData): Promise<ConfirmDeliveryOutcome>
 }

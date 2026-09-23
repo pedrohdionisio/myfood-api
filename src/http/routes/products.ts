@@ -41,7 +41,7 @@ export function registerProductRoutes(app: App, container: DependencyContainer):
         querystring: listProductsQuerySchema,
         response: { 200: productsResponseSchema }
       },
-      preHandler: [app.authenticateRestaurantUser, app.requireMembership()]
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
     },
     async (request) => {
       const products = await listProducts.execute(

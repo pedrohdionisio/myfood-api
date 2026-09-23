@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
 import type { IOrderNotificationTarget } from '@/application/interfaces/IOrdersRepository.js'
 import type {
@@ -143,6 +143,18 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         .returning({ orderId: payments.orderId })
 
       if (!charge) {
+        // O Pix foi pago depois que a varredura já expirou a cobrança e cancelou o pedido. O
+        // dinheiro entrou e o pedido não vai acontecer: sem isto ele ficaria com a plataforma.
+        await tx
+          .update(payments)
+          .set({ status: 'REFUND_PENDING', paidAt: new Date(), receiptUrl: data.receiptUrl })
+          .where(
+            and(
+              eq(payments.providerChargeId, data.providerChargeId),
+              inArray(payments.status, ['EXPIRED', 'CANCELED'])
+            )
+          )
+
         return null
       }
 
@@ -241,7 +253,7 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
 
       const [canceled] = await tx
         .update(orders)
-        .set({ status: 'CANCELED', finishedAt: new Date() })
+        .set({ status: 'CANCELED', paymentStatus: 'FAILED', finishedAt: new Date() })
         .where(and(eq(orders.id, charge.orderId), eq(orders.status, 'PENDING_PAYMENT')))
         .returning(ORDER_NOTIFICATION_COLUMNS)
 

@@ -67,7 +67,7 @@ export function registerRestaurantRoutes(app: App, container: DependencyContaine
         params: restaurantScopeParamsSchema,
         response: { 200: restaurantResponseSchema }
       },
-      preHandler: [app.authenticateRestaurantUser, app.requireMembership()]
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
     },
     async (request) =>
       toRestaurantResponse(await getRestaurant.execute(request.params.restaurantId), mediaBaseUrl)

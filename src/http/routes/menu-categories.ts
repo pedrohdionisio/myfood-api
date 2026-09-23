@@ -42,7 +42,7 @@ export function registerMenuCategoryRoutes(app: App, container: DependencyContai
         params: restaurantScopeParamsSchema,
         response: { 200: menuCategoriesResponseSchema }
       },
-      preHandler: [app.authenticateRestaurantUser, app.requireMembership()]
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
     },
     async (request) => listMenuCategories.execute(request.params.restaurantId)
   )

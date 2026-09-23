@@ -6,11 +6,7 @@ import type {
   IPutObjectParams,
   IStorageGateway
 } from '@/application/interfaces/IStorageGateway.js'
-
-export interface IS3Credentials {
-  accessKeyId: string
-  secretAccessKey: string
-}
+import type { IAwsCredentials } from '@/config/aws.js'
 
 export class S3StorageGateway implements IStorageGateway {
   private readonly client: S3Client
@@ -18,7 +14,7 @@ export class S3StorageGateway implements IStorageGateway {
   constructor(
     private readonly bucket: string,
     region: string,
-    credentials?: IS3Credentials
+    credentials?: IAwsCredentials
   ) {
     this.client = new S3Client({ region, ...(credentials ? { credentials } : {}) })
   }

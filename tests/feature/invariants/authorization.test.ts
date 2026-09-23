@@ -112,27 +112,10 @@ describe('authorization matrix', () => {
       expect(unknown.json().message).toBe(foreign.json().message)
     })
 
-    it('should keep drivers out of owner routes but let them read the restaurant and menu', async () => {
+    it('should keep drivers out of every restaurant route', async () => {
       const driver = await createStaff(t.db, restaurantId, 'DRIVER')
-      const statuses = async (paths: string[]) =>
-        Promise.all(
-          paths.map(async (path) => {
-            const response = await call(`/restaurants/${restaurantId}${path}`, driver.token)
-            return [path, response.statusCode]
-          })
-        )
 
-      expect(await statuses(['/orders', '/members', '/analytics', '/reviews'])).toEqual([
-        ['/orders', 403],
-        ['/members', 403],
-        ['/analytics', 403],
-        ['/reviews', 403]
-      ])
-      expect(await statuses(['', '/products', '/menu-categories'])).toEqual([
-        ['', 200],
-        ['/products', 200],
-        ['/menu-categories', 200]
-      ])
+      expect(allForbidden(await statusesFor(driver.token))).toEqual([])
     })
 
     it('should let an active owner through', async () => {

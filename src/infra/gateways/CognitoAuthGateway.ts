@@ -25,17 +25,13 @@ import type {
   IResetPasswordParams,
   ISignInParams
 } from '@/application/interfaces/IAuthGateway.js'
+import type { IAwsCredentials } from '@/config/aws.js'
 import {
   ConflictError,
   DomainError,
   TooManyRequestsError,
   UnauthorizedError
 } from '@/domain/errors.js'
-
-export interface ICognitoCredentials {
-  accessKeyId: string
-  secretAccessKey: string
-}
 
 export class CognitoAuthGateway implements IAuthGateway {
   private readonly client: CognitoIdentityProviderClient
@@ -44,7 +40,7 @@ export class CognitoAuthGateway implements IAuthGateway {
     private readonly userPoolId: string,
     private readonly clientId: string,
     region: string,
-    credentials?: ICognitoCredentials
+    credentials?: IAwsCredentials
   ) {
     this.client = new CognitoIdentityProviderClient({
       region,

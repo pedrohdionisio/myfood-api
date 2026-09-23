@@ -18,14 +18,12 @@ export function isValidWebhookSecret(expected: string, received: string | undefi
   return received !== undefined && matches(expected, received)
 }
 
-export function isValidWebhookSignature(rawBody: string, signature: string | undefined): boolean {
-  if (signature === undefined) {
-    return false
-  }
-
-  const expected = createHmac('sha256', ABACATEPAY_PUBLIC_KEY)
+export function signWebhookPayload(rawBody: string): string {
+  return createHmac('sha256', ABACATEPAY_PUBLIC_KEY)
     .update(Buffer.from(rawBody, 'utf8'))
     .digest('base64')
+}
 
-  return matches(expected, signature)
+export function isValidWebhookSignature(rawBody: string, signature: string | undefined): boolean {
+  return signature !== undefined && matches(signWebhookPayload(rawBody), signature)
 }

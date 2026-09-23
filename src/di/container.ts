@@ -117,61 +117,80 @@ import { DrizzleReviewsRepository } from '@/infra/repositories/DrizzleReviewsRep
 import { InMemoryOrderStream } from '@/infra/streams/InMemoryOrderStream.js'
 import { TOKENS } from './tokens.js'
 
-export function buildContainer(env: Env): DependencyContainer {
-  const container = rootContainer.createChildContainer()
+export interface IAdapters {
+  customerTokenVerifier: ITokenVerifier
+  restaurantTokenVerifier: ITokenVerifier
+  customerAuthGateway: IAuthGateway
+  restaurantAuthGateway: IAuthGateway
+  storageGateway: IStorageGateway
+  imageProcessor: IImageProcessor
+  paymentGateway: IPaymentGateway
+  pushGateway: IPushGateway
+}
 
-  const database = createDatabaseConnection(env.DATABASE_URL)
-  container.register<IDatabaseConnection>(TOKENS.Database, { useValue: database })
-
-  // Dois pools, dois verificadores. Um token do app de cliente não passa no verificador do
-  // dashboard porque o issuer e o audience são de outro pool.
-  container.register<ITokenVerifier>(TOKENS.CustomerTokenVerifier, {
-    useValue: new CognitoTokenVerifier(env.COGNITO_CUSTOMER_POOL_ID, env.COGNITO_CUSTOMER_CLIENT_ID)
-  })
-
-  container.register<ITokenVerifier>(TOKENS.RestaurantTokenVerifier, {
-    useValue: new CognitoTokenVerifier(
-      env.COGNITO_RESTAURANT_POOL_ID,
-      env.COGNITO_RESTAURANT_CLIENT_ID
-    )
-  })
-
+export function buildAdapters(env: Env): IAdapters {
   const credentials =
     env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
       ? { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY }
       : undefined
 
-  const customerAuthGateway: IAuthGateway = new CognitoAuthGateway(
-    env.COGNITO_CUSTOMER_POOL_ID,
-    env.COGNITO_CUSTOMER_CLIENT_ID,
-    env.AWS_REGION,
-    credentials
-  )
-  container.register<IAuthGateway>(TOKENS.CustomerAuthGateway, { useValue: customerAuthGateway })
+  return {
+    // Dois pools, dois verificadores. Um token do app de cliente não passa no verificador do
+    // dashboard porque o issuer e o audience são de outro pool.
+    customerTokenVerifier: new CognitoTokenVerifier(
+      env.COGNITO_CUSTOMER_POOL_ID,
+      env.COGNITO_CUSTOMER_CLIENT_ID
+    ),
+    restaurantTokenVerifier: new CognitoTokenVerifier(
+      env.COGNITO_RESTAURANT_POOL_ID,
+      env.COGNITO_RESTAURANT_CLIENT_ID
+    ),
+    customerAuthGateway: new CognitoAuthGateway(
+      env.COGNITO_CUSTOMER_POOL_ID,
+      env.COGNITO_CUSTOMER_CLIENT_ID,
+      env.AWS_REGION,
+      credentials
+    ),
+    restaurantAuthGateway: new CognitoAuthGateway(
+      env.COGNITO_RESTAURANT_POOL_ID,
+      env.COGNITO_RESTAURANT_CLIENT_ID,
+      env.AWS_REGION,
+      credentials
+    ),
+    storageGateway: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION, credentials),
+    imageProcessor: new SharpImageProcessor(),
+    paymentGateway: new AbacatePayPaymentGateway(env.ABACATEPAY_API_URL, env.ABACATEPAY_API_KEY),
+    pushGateway: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN)
+  }
+}
 
-  const restaurantAuthGateway: IAuthGateway = new CognitoAuthGateway(
-    env.COGNITO_RESTAURANT_POOL_ID,
-    env.COGNITO_RESTAURANT_CLIENT_ID,
-    env.AWS_REGION,
-    credentials
-  )
+export function buildContainer(
+  env: Env,
+  adapters: IAdapters = buildAdapters(env)
+): DependencyContainer {
+  const container = rootContainer.createChildContainer()
+
+  const database = createDatabaseConnection(env.DATABASE_URL)
+  container.register<IDatabaseConnection>(TOKENS.Database, { useValue: database })
+
+  const { customerAuthGateway, restaurantAuthGateway } = adapters
+
+  container.register<ITokenVerifier>(TOKENS.CustomerTokenVerifier, {
+    useValue: adapters.customerTokenVerifier
+  })
+  container.register<ITokenVerifier>(TOKENS.RestaurantTokenVerifier, {
+    useValue: adapters.restaurantTokenVerifier
+  })
+  container.register<IAuthGateway>(TOKENS.CustomerAuthGateway, { useValue: customerAuthGateway })
   container.register<IAuthGateway>(TOKENS.RestaurantAuthGateway, {
     useValue: restaurantAuthGateway
   })
-
-  container.register<IStorageGateway>(TOKENS.StorageGateway, {
-    useValue: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION, credentials)
-  })
-
-  container.register<IImageProcessor>(TOKENS.ImageProcessor, {
-    useValue: new SharpImageProcessor()
-  })
+  container.register<IStorageGateway>(TOKENS.StorageGateway, { useValue: adapters.storageGateway })
+  container.register<IImageProcessor>(TOKENS.ImageProcessor, { useValue: adapters.imageProcessor })
+  container.register<IPaymentGateway>(TOKENS.PaymentGateway, { useValue: adapters.paymentGateway })
+  container.register<IPushGateway>(TOKENS.PushGateway, { useValue: adapters.pushGateway })
 
   container.register<string>(TOKENS.MediaBaseUrl, { useValue: env.MEDIA_BASE_URL })
-
-  container.register<IPaymentGateway>(TOKENS.PaymentGateway, {
-    useValue: new AbacatePayPaymentGateway(env.ABACATEPAY_API_URL, env.ABACATEPAY_API_KEY)
-  })
 
   container.register<string>(TOKENS.PaymentWebhookSecret, {
     useValue: env.ABACATEPAY_WEBHOOK_SECRET
@@ -179,10 +198,6 @@ export function buildContainer(env: Env): DependencyContainer {
 
   container.register<number>(TOKENS.PixExpiresInSeconds, {
     useValue: env.PAYMENT_PIX_EXPIRES_IN_SECONDS
-  })
-
-  container.register<IPushGateway>(TOKENS.PushGateway, {
-    useValue: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN)
   })
 
   // O stream vive na memória do processo: só entrega aos SSE abertos nesta instância da API.

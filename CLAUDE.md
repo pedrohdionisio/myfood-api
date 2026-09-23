@@ -34,8 +34,8 @@ Read `docs/architecture.md` before making non-trivial changes. The database sche
 
 ## Workflow
 
-- **Do not write tests for now.** No unit, integration or e2e tests, and no test tooling. The test suite is deferred to a later phase (see the implementation plan); the user runs real verification manually in the meantime.
-- **After finishing any action or phase, run the linter and `tsc`** (`pnpm lint && pnpm typecheck`) and report the result. That is the full automated verification for now — do not add other checks.
+- **Tests are Vitest, in two projects.** `unit` (`tests/unit/`) covers pure domain rules and use cases that only orchestrate external ports; `feature` (`tests/feature/`) drives the real app through `app.inject()` against a real PostGIS started by Testcontainers. Only external services are faked — Postgres never is, because the invariants live in SQL. New behavior gets tests; reuse `tests/support/` (fakes, factories, scenarios) instead of building setup inline. Docker must be running for `pnpm test:feature`.
+- **After finishing any action or phase, run `pnpm lint && pnpm typecheck && pnpm test`** and report the result.
 - **Almost no comments.** Do not narrate what the code does, and do not write JSDoc as a matter of course. A comment is justified only when the code alone would lead someone to make a wrong change — a non-obvious constraint, or a workaround that looks like a mistake. Explain everything else to the user in conversation instead.
 - **Comments, when they exist, are written in Portuguese.** This is the one exception to the English rule below: identifiers, table and column names, commit messages and documentation stay in English.
 
@@ -100,7 +100,7 @@ authenticate but has no identity here, which is a broken state, not a degraded o
 
 ## Non-negotiable rules
 
-1. **`orders.delivery_code` is visible only to the customer who owns the order.** It must never appear in restaurant or driver routes, SSE/event payloads, push notification text or logs (keep it in Pino `redact`). While there are no tests, the guarantee is purely structural: only the customer's own order route may declare the field in a response schema, and Fastify serializes nothing that is not declared. Integration tests will assert its absence when the suite is written.
+1. **`orders.delivery_code` is visible only to the customer who owns the order.** It must never appear in restaurant or driver routes, SSE/event payloads, push notification text or logs (keep it in Pino `redact`). The guarantee is structural — only the customer's own order route may declare the field in a response schema, and Fastify serializes nothing that is not declared — and `tests/feature/invariants/` enforces it: one test walks the OpenAPI spec for routes declaring the field, another reads every restaurant and driver payload looking for the code.
 2. **Never trust totals from the client.** Checkout recalculates prices, availability, delivery city, delivery fee and opening hours from the database.
 3. **Order status changes go through the state machine** (`docs/architecture.md`) and always write a row to `order_status_history` in the same transaction.
 4. **Delivery confirmation is atomic**: a single conditional `UPDATE ... WHERE status = 'OUT_FOR_DELIVERY' AND delivery_code = $code`, with a per-order attempt limit and every attempt recorded in `delivery_confirmation_attempts`.

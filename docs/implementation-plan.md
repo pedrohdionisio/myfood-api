@@ -4,19 +4,18 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 12 — Hardening, with two end-to-end runs pending from earlier phases. Phases 0–9 and 11 are done. Phase 10 (payments) is written but **unverified**, and so is the push half of Phase 11. Both were waiting on the frontends, which now exist — the two runs are the next real work, not a later phase.
+**Current phase:** Phase 12 — Hardening (CI, README, publishing `docs/api/`). Phases 0–9, 11 and 13 are done. Phase 10 (payments) and the push half of Phase 11 pass the feature suite against fakes, but still need one end-to-end run against AbacatePay and Expo from the frontends.
 
 ---
 
 ## Ground rules for every phase
 
-- **No tests for now.** No unit, integration or e2e tests, and no test tooling. Everything that was going to be proven by a test is listed in Phase 13 so nothing is lost; real verification is manual and belongs to the user.
-- **Automated verification after every action is `pnpm lint && pnpm typecheck`.** Nothing else. Phase 0 must create those two scripts, since every later phase depends on them.
+- **Automated verification after every action is `pnpm lint && pnpm typecheck && pnpm test`.** The suite arrived in Phase 13; before it, only lint and typecheck ran.
 - A phase is done when its "Done when" line holds and both checks pass.
 - Every route declares Zod schemas for params, query, body **and response**.
 - No phase leaves the build red or the OpenAPI spec broken — the two frontends generate clients from it.
 
-> **What deferring tests costs.** Response schemas are the only thing keeping `delivery_code` out of restaurant and driver payloads (non-negotiable rule 1). Fastify serializes only declared fields, so the guarantee is structural and holds — but nothing will *catch a regression* until Phase 13. Same for the concurrency invariants in Phases 6 and 7: the code is written to be correct, not proven correct. Treat those spots as the ones to re-read when the suite arrives.
+> **Phases 0–12 were written without tests.** Phase 13 went back over the spots they left unproven — rule 1, the concurrency invariants of Phases 6 and 7, the payment webhook — and each now has a test.
 
 ---
 
@@ -621,7 +620,7 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 - [x] `Idempotency-Key` confere o corpo e vence em 24h — as duas lacunas deixadas na Fase 6.
       Migration `0014` (`request_hash`); a limpeza de chave vencida é feita ao reivindicá-la de
       novo, sem job (architecture.md §7.4)
-- [ ] CI: lint e typecheck, e regerar `docs/api/` — precisa de variáveis de ambiente falsas, porque
+- [ ] CI: lint, typecheck e `pnpm test` (o runner do GitHub já tem Docker), e regerar `docs/api/` — precisa de variáveis de ambiente falsas, porque
       `generate-openapi.ts` passa por `config/env.ts`
 - [ ] README covering setup, the `serverless deploy` step and required environment variables
 - [ ] Publicar `docs/api/` (GitHub Pages) — combinado de tratar junto com o deploy da API
@@ -650,23 +649,50 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 
 ---
 
-## Phase 13 — Test suite (deferred)
+## Phase 13 — Test suite
 
-Not scheduled. Listed so the deferred verification is not lost, roughly in order of what is worth writing first.
+Vitest, in two projects. `pnpm test` runs both; `test:unit` needs nothing, `test:feature` needs Docker.
 
-- [ ] Vitest + Testcontainers (real PostGIS per suite, migrations applied, truncation between tests)
-- [ ] `buildTestApp()` using `app.inject()` — no network port
-- [ ] Fake adapters for the three ports: `TokenVerifier`, `EventPublisher`, `FileStorage`
-- [ ] **Rule 1:** walk the JSON of every restaurant and driver route asserting `deliveryCode` / `delivery_code` is absent
-- [ ] Password recovery does not leak account existence: `forgot-password` and `reset-password` answer identically for a known and an unknown e-mail
-- [ ] **§12:** an order in `PENDING_PAYMENT` appears in no restaurant route — it leaked once already,
-      because the dashboard queries never had to exclude a status that nothing produced
-- [ ] **Rule 4:** brute-force the delivery code until blocked; two concurrent confirmations → one `DELIVERED`
-- [ ] **D8:** N concurrent checkouts at one restaurant → no `display_number` collision
-- [ ] **D2:** replaying an `Idempotency-Key` returns the original order
-- [ ] **Rule 6:** processing the same SQS message twice leaves aggregates unchanged
-- [ ] **Rule 2:** a checkout with tampered client totals is priced from the database
-- [ ] Domain unit tests: `calculateLineTotal`, `isOpenAt` (including the midnight-crossing shift), `resolveDeliveryFee`, `canTransition`
-- [ ] Authorization matrix: no token, wrong pool, inactive member, wrong role
-- [ ] Archived product stays resolvable in a historical order
-- [ ] One test against a real SQS queue, run outside the default suite
+- [x] `buildContainer(env, adapters)` — the external adapters moved to `buildAdapters(env)`. Before
+      this, the password and refresh use cases captured the Cognito gateway at construction, so
+      registering a fake afterwards would not reach them
+- [x] Vitest + Testcontainers: one PostGIS per run, migrations applied once to a template database,
+      one copy per worker (`CREATE DATABASE ... TEMPLATE`), truncation between tests
+- [x] `setupTestApp()` using `app.inject()` — no network port, except the SSE test
+- [x] Fake adapters for every external port: token verifier, auth gateway, storage, image
+      processor, payment gateway, push gateway (`tests/support/fakes/`)
+- [x] Factories and an ordering scenario (restaurant, owner, driver, customer, address, products)
+      shared by every feature test
+- [x] Unit: the whole `src/domain`, webhook signature, S3 notification parsing, log redaction,
+      sign-up saga for both pools, `NotifyOrderChangeUseCase`, image variants, the Cognito
+      `CustomMessage` trigger, Cognito error mapping, and every DI token resolving
+- [x] Feature, one file per route module: auth, restaurants, members, menu, discovery, addresses,
+      push tokens, uploads, orders, restaurant orders, deliveries, payments, reviews, analytics, SSE
+- [x] **Rule 1:** the OpenAPI spec declares `deliveryCode` in exactly the three customer routes, and
+      every restaurant and driver payload, push and stream event is searched for the code
+- [x] Password recovery does not leak account existence (Cognito error mapping + route responses)
+- [x] **§12:** an order in `PENDING_PAYMENT` appears in no restaurant or driver read
+- [x] **Rule 4:** wrong codes until blocked; two concurrent confirmations → one `DELIVERED`
+- [x] **D8:** concurrent checkouts → distinct `display_number`
+- [x] **D2:** replay, different body, other customer, concurrent same key
+- [x] **Rule 6:** reprocessing the same event leaves the aggregates unchanged
+- [x] **Rule 2:** tampered client totals are priced from the database
+- [x] **Rules 8 and 9:** webhook 401 on each failed check, 500 on processing failure, dedup by event
+      id; `ORDER_CREATED` only after payment
+- [x] Authorization matrix, derived from the spec: every non-public operation requires a token,
+      every restaurant route requires membership; no token, wrong pool, non-member, inactive member,
+      suspended restaurant, driver on owner routes
+- [x] Archived product stays resolvable in a historical order
+- [ ] ~~One test against a real SQS queue~~ — dropped: it would test the AWS SDK and need
+      credentials; idempotency is proven at the use case
+
+### Notes from Phase 13
+
+- **Validation runs before the auth preHandler in Fastify.** A request without a valid body gets 422
+  before 401, so the generic 401 matrix only walks body-less GETs. The routes with a body are held
+  by the spec-based contract test instead, which checks the preHandlers through `security`.
+- **Test restaurants open 00:00–00:00.** `isOpenAt` reads it as the full day, and the route
+  validation refuses it, so the factory inserts it directly. 00:00–23:59 would leave one closed
+  minute and a test that fails once a day.
+- **Every request gets a random IP** in the feature suite, because the rate limit is per IP and per
+  app instance. The rate-limit behavior itself is not asserted.

@@ -51,14 +51,16 @@ Every external service sits behind a port. The real adapter runs in development 
 
 | Port | Real adapter | Test adapter |
 |---|---|---|
-| `ITokenVerifier` | Cognito (`aws-jwt-verify`), one instance per pool | In-memory signer |
-| `IEventPublisher` | SQS | In-memory buffer |
+| `ITokenVerifier` | Cognito (`aws-jwt-verify`), one instance per pool | Accepts `<pool>.<sub>`, rejects the other pool |
+| `IAuthGateway` | Cognito User Pool, one instance per pool | In-memory accounts issuing `<pool>.<sub>` tokens |
 | `IStorageGateway` | S3 presigned POST + get/put | In-memory key map |
 | `IImageProcessor` | Sharp | Identity buffer |
+| `IPaymentGateway` | AbacatePay | In-memory charges with settable status |
+| `IPushGateway` | Expo | Records what was sent |
 
-Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. The SQS worker gets one separate test that runs against a real queue, outside the default `vitest run`.
+The real adapters are built by `buildAdapters(env)`; `buildContainer(env, adapters)` takes them as a parameter, which is how the tests swap them. Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. SQS itself is never reached by the suite — the feature tests read `outbox_events` and call `ProcessOrderEventUseCase` directly, which is where idempotency (rule 6) lives.
 
-Postgres stays in Docker — it is not pay-per-use, and Testcontainers needs a local engine.
+Postgres is never faked: checkout numbering, delivery confirmation, idempotency and status history are enforced by SQL. The feature suite starts one PostGIS container per run (Testcontainers), migrates a template database once, and gives each Vitest worker its own copy.
 
 ## 4. Authentication and authorization
 

@@ -51,7 +51,7 @@ export type App = FastifyInstance<
 
 // delivery_code nunca pode ser logado. O Pino não tem wildcard recursivo,
 // então os níveis de aninhamento são escritos um a um.
-const REDACTED_PATHS = [
+export const REDACTED_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'deliveryCode',

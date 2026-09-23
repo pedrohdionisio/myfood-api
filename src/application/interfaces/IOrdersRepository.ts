@@ -132,8 +132,17 @@ export interface IDriverDelivery {
   dispatchedAt: string | null
 }
 
-export interface IDriverAssignment {
+// O mínimo que uma notificação precisa saber do pedido. Não tem deliveryCode, como nenhum DTO
+// que não seja o do próprio cliente (regra 1).
+export interface IOrderNotificationTarget {
+  id: string
+  restaurantId: string
+  customerId: string
+  displayNumber: number
   status: OrderStatus
+}
+
+export interface IDriverAssignment extends IOrderNotificationTarget {
   driverMemberId: string | null
 }
 

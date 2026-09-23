@@ -1,5 +1,6 @@
 import { and, asc, eq, lt, sql } from 'drizzle-orm'
 import { inject, injectable } from 'tsyringe'
+import type { IOrderNotificationTarget } from '@/application/interfaces/IOrdersRepository.js'
 import type {
   IConfirmPaymentData,
   ICreatePaymentData,
@@ -19,6 +20,7 @@ import {
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError } from '@/domain/errors.js'
 import { uuidv7 } from '@/shared/uuid.js'
+import { ORDER_NOTIFICATION_COLUMNS } from './order-notification-columns.js'
 import { violatesUniqueConstraint } from './unique-violation.js'
 
 const OPEN_CHARGE = 'payments_one_open_charge'
@@ -111,7 +113,7 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
     }
   }
 
-  async confirm(data: IConfirmPaymentData): Promise<boolean> {
+  async confirm(data: IConfirmPaymentData): Promise<IOrderNotificationTarget | null> {
     return this.database.db.transaction(async (tx) => {
       const claimed = await tx
         .insert(paymentWebhookEvents)
@@ -125,7 +127,7 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         .returning({ eventId: paymentWebhookEvents.eventId })
 
       if (claimed.length === 0) {
-        return false
+        return null
       }
 
       const [charge] = await tx
@@ -141,17 +143,17 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         .returning({ orderId: payments.orderId })
 
       if (!charge) {
-        return false
+        return null
       }
 
-      const updated = await tx
+      const [updated] = await tx
         .update(orders)
         .set({ status: 'PENDING', paymentStatus: 'PAID' })
         .where(and(eq(orders.id, charge.orderId), eq(orders.status, 'PENDING_PAYMENT')))
-        .returning({ id: orders.id })
+        .returning(ORDER_NOTIFICATION_COLUMNS)
 
-      if (updated.length === 0) {
-        return false
+      if (!updated) {
+        return null
       }
 
       await tx.insert(orderStatusHistory).values({
@@ -167,7 +169,7 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         .insert(outboxEvents)
         .values({ id: uuidv7(), type: 'ORDER_CREATED', orderId: charge.orderId })
 
-      return true
+      return updated
     })
   }
 
@@ -225,8 +227,8 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
       .limit(limit)
   }
 
-  async expire(chargeId: string): Promise<void> {
-    await this.database.db.transaction(async (tx) => {
+  async expire(chargeId: string): Promise<IOrderNotificationTarget | null> {
+    return this.database.db.transaction(async (tx) => {
       const [charge] = await tx
         .update(payments)
         .set({ status: 'EXPIRED' })
@@ -234,17 +236,17 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         .returning({ orderId: payments.orderId })
 
       if (!charge) {
-        return
+        return null
       }
 
-      const canceled = await tx
+      const [canceled] = await tx
         .update(orders)
         .set({ status: 'CANCELED', finishedAt: new Date() })
         .where(and(eq(orders.id, charge.orderId), eq(orders.status, 'PENDING_PAYMENT')))
-        .returning({ id: orders.id })
+        .returning(ORDER_NOTIFICATION_COLUMNS)
 
-      if (canceled.length === 0) {
-        return
+      if (!canceled) {
+        return null
       }
 
       await tx.insert(orderStatusHistory).values({
@@ -255,6 +257,8 @@ export class DrizzlePaymentsRepository implements IPaymentsRepository {
         actorId: null,
         reason: 'Pix não pago dentro do prazo.'
       })
+
+      return canceled
     })
   }
 

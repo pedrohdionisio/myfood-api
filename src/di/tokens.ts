@@ -9,6 +9,8 @@ export const TOKENS = {
   ImageProcessor: Symbol('ImageProcessor'),
   MediaBaseUrl: Symbol('MediaBaseUrl'),
   PaymentGateway: Symbol('PaymentGateway'),
+  PushGateway: Symbol('PushGateway'),
+  OrderStream: Symbol('OrderStream'),
   PaymentWebhookSecret: Symbol('PaymentWebhookSecret'),
   PixExpiresInSeconds: Symbol('PixExpiresInSeconds'),
 
@@ -25,6 +27,7 @@ export const TOKENS = {
   PaymentsRepository: Symbol('PaymentsRepository'),
   ReviewsRepository: Symbol('ReviewsRepository'),
   OutboxRepository: Symbol('OutboxRepository'),
+  PushTokensRepository: Symbol('PushTokensRepository'),
   AnalyticsRepository: Symbol('AnalyticsRepository'),
 
   SignUpCustomerUseCase: Symbol('SignUpCustomerUseCase'),
@@ -58,6 +61,9 @@ export const TOKENS = {
   ListRestaurantOrdersUseCase: Symbol('ListRestaurantOrdersUseCase'),
   ChangeOrderStatusUseCase: Symbol('ChangeOrderStatusUseCase'),
   DispatchOrderUseCase: Symbol('DispatchOrderUseCase'),
+  NotifyOrderChangeUseCase: Symbol('NotifyOrderChangeUseCase'),
+  RegisterPushTokenUseCase: Symbol('RegisterPushTokenUseCase'),
+  UnregisterPushTokenUseCase: Symbol('UnregisterPushTokenUseCase'),
   ListMyDeliveriesUseCase: Symbol('ListMyDeliveriesUseCase'),
   ConfirmDeliveryUseCase: Symbol('ConfirmDeliveryUseCase'),
   FailDeliveryUseCase: Symbol('FailDeliveryUseCase'),

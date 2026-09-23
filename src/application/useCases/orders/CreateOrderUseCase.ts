@@ -8,6 +8,7 @@ import type {
 } from '@/application/interfaces/IOrdersRepository.js'
 import type { IProduct, IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { isSameCity } from '@/domain/address.js'
 import { generateDeliveryCode, resolveDeliveryFee } from '@/domain/delivery.js'
@@ -47,7 +48,9 @@ export class CreateOrderUseCase {
     @inject(TOKENS.CustomerAddressesRepository)
     private readonly addresses: ICustomerAddressesRepository,
     @inject(TOKENS.OpeningHoursRepository)
-    private readonly openingHours: IOpeningHoursRepository
+    private readonly openingHours: IOpeningHoursRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: ICreateOrderInput): Promise<IOrder> {
@@ -110,7 +113,7 @@ export class CreateOrderUseCase {
 
     this.assertPayment(input, totalCents)
 
-    return this.orders.create({
+    const order = await this.orders.create({
       idempotencyKey: input.idempotencyKey,
       customerId: input.customerId,
       restaurantId: restaurant.id,
@@ -132,6 +135,12 @@ export class CreateOrderUseCase {
       deliveryReference: address.reference ?? undefined,
       items
     })
+
+    // Pedido em dinheiro já nasce visível ao restaurante; o online só aparece quando o Pix
+    // confirma, e é o webhook que avisa (§12).
+    await this.notify.execute({ change: 'PLACED', actor: 'CUSTOMER', order })
+
+    return order
   }
 
   private async loadProducts(input: ICreateOrderInput): Promise<Map<string, IProduct>> {

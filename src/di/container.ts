@@ -8,11 +8,14 @@ import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.j
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IMenuCategoriesRepository } from '@/application/interfaces/IMenuCategoriesRepository.js'
 import type { IOpeningHoursRepository } from '@/application/interfaces/IOpeningHoursRepository.js'
+import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
 import type { IOutboxRepository } from '@/application/interfaces/IOutboxRepository.js'
 import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
 import type { IPaymentsRepository } from '@/application/interfaces/IPaymentsRepository.js'
 import type { IProductsRepository } from '@/application/interfaces/IProductsRepository.js'
+import type { IPushGateway } from '@/application/interfaces/IPushGateway.js'
+import type { IPushTokensRepository } from '@/application/interfaces/IPushTokensRepository.js'
 import type { IRestaurantsRepository } from '@/application/interfaces/IRestaurantsRepository.js'
 import type { IRestaurantUsersRepository } from '@/application/interfaces/IRestaurantUsersRepository.js'
 import type { IReviewsRepository } from '@/application/interfaces/IReviewsRepository.js'
@@ -52,6 +55,7 @@ import { CreateMenuCategoryUseCase } from '@/application/useCases/menuCategories
 import { ListMenuCategoriesUseCase } from '@/application/useCases/menuCategories/ListMenuCategoriesUseCase.js'
 import { ReorderMenuCategoriesUseCase } from '@/application/useCases/menuCategories/ReorderMenuCategoriesUseCase.js'
 import { UpdateMenuCategoryUseCase } from '@/application/useCases/menuCategories/UpdateMenuCategoryUseCase.js'
+import { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { ListOpeningHoursUseCase } from '@/application/useCases/openingHours/ListOpeningHoursUseCase.js'
 import { ReplaceOpeningHoursUseCase } from '@/application/useCases/openingHours/ReplaceOpeningHoursUseCase.js'
 import { CancelOrderUseCase } from '@/application/useCases/orders/CancelOrderUseCase.js'
@@ -71,6 +75,8 @@ import { ListProductsUseCase } from '@/application/useCases/products/ListProduct
 import { ReorderProductsUseCase } from '@/application/useCases/products/ReorderProductsUseCase.js'
 import { SetProductAvailabilityUseCase } from '@/application/useCases/products/SetProductAvailabilityUseCase.js'
 import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
+import { RegisterPushTokenUseCase } from '@/application/useCases/pushTokens/RegisterPushTokenUseCase.js'
+import { UnregisterPushTokenUseCase } from '@/application/useCases/pushTokens/UnregisterPushTokenUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
 import { CreateRestaurantUseCase } from '@/application/useCases/restaurants/CreateRestaurantUseCase.js'
 import { GetActivationChecklistUseCase } from '@/application/useCases/restaurants/GetActivationChecklistUseCase.js'
@@ -88,6 +94,7 @@ import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.
 import { AbacatePayPaymentGateway } from '@/infra/gateways/AbacatePayPaymentGateway.js'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
+import { ExpoPushGateway } from '@/infra/gateways/ExpoPushGateway.js'
 import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
 import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
 import { DrizzleAnalyticsRepository } from '@/infra/repositories/DrizzleAnalyticsRepository.js'
@@ -101,9 +108,11 @@ import { DrizzleOrdersRepository } from '@/infra/repositories/DrizzleOrdersRepos
 import { DrizzleOutboxRepository } from '@/infra/repositories/DrizzleOutboxRepository.js'
 import { DrizzlePaymentsRepository } from '@/infra/repositories/DrizzlePaymentsRepository.js'
 import { DrizzleProductsRepository } from '@/infra/repositories/DrizzleProductsRepository.js'
+import { DrizzlePushTokensRepository } from '@/infra/repositories/DrizzlePushTokensRepository.js'
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
 import { DrizzleReviewsRepository } from '@/infra/repositories/DrizzleReviewsRepository.js'
+import { InMemoryOrderStream } from '@/infra/streams/InMemoryOrderStream.js'
 import { TOKENS } from './tokens.js'
 
 export function buildContainer(env: Env): DependencyContainer {
@@ -169,6 +178,14 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register<number>(TOKENS.PixExpiresInSeconds, {
     useValue: env.PAYMENT_PIX_EXPIRES_IN_SECONDS
   })
+
+  container.register<IPushGateway>(TOKENS.PushGateway, {
+    useValue: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN)
+  })
+
+  // O stream vive na memória do processo: só entrega aos SSE abertos nesta instância da API.
+  // Num worker ele existe e não tem ouvintes — o dashboard vê aquela mudança no próximo refetch.
+  container.register<IOrderStream>(TOKENS.OrderStream, { useValue: new InMemoryOrderStream() })
 
   container.register<ICustomersRepository>(
     TOKENS.CustomersRepository,
@@ -467,6 +484,30 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.DeleteCustomerAddressUseCase,
     { useClass: DeleteCustomerAddressUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register<IPushTokensRepository>(
+    TOKENS.PushTokensRepository,
+    { useClass: DrizzlePushTokensRepository },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.NotifyOrderChangeUseCase,
+    { useClass: NotifyOrderChangeUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.RegisterPushTokenUseCase,
+    { useClass: RegisterPushTokenUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UnregisterPushTokenUseCase,
+    { useClass: UnregisterPushTokenUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

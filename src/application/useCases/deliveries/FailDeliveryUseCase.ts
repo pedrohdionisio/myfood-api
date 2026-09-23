@@ -1,6 +1,7 @@
 import { inject, injectable } from 'tsyringe'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
 import { assertCanTransition, timestampFieldsFor } from '@/domain/order-status.js'
@@ -18,7 +19,9 @@ export class FailDeliveryUseCase {
     @inject(TOKENS.OrdersRepository)
     private readonly orders: IOrdersRepository,
     @inject(TOKENS.MembershipsRepository)
-    private readonly memberships: IMembershipsRepository
+    private readonly memberships: IMembershipsRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: IFailDeliveryInput): Promise<void> {
@@ -50,5 +53,11 @@ export class FailDeliveryUseCase {
         'Este pedido mudou de status enquanto você agia. Recarregue suas entregas.'
       )
     }
+
+    await this.notify.execute({
+      change: 'STATUS_CHANGED',
+      actor: 'DRIVER',
+      order: { ...assignment, status: 'DELIVERY_FAILED' }
+    })
   }
 }

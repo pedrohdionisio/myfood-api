@@ -3,6 +3,7 @@ import type {
   IOrdersRepository,
   IRestaurantOrder
 } from '@/application/interfaces/IOrdersRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import type { OrderStatus } from '@/domain/enums.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
@@ -20,7 +21,9 @@ export interface IChangeOrderStatusInput {
 export class ChangeOrderStatusUseCase {
   constructor(
     @inject(TOKENS.OrdersRepository)
-    private readonly orders: IOrdersRepository
+    private readonly orders: IOrdersRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: IChangeOrderStatusInput): Promise<IRestaurantOrder> {
@@ -56,6 +59,8 @@ export class ChangeOrderStatusUseCase {
     if (!updated) {
       throw new NotFoundError(`Pedido ${orderId} desapareceu após a transição.`)
     }
+
+    await this.notify.execute({ change: 'STATUS_CHANGED', actor: 'OWNER', order: updated })
 
     return updated
   }

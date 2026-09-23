@@ -34,6 +34,7 @@ import { registerOpeningHoursRoutes } from './routes/opening-hours.js'
 import { registerOrderRoutes } from './routes/orders.js'
 import { registerPaymentRoutes } from './routes/payments.js'
 import { registerProductRoutes } from './routes/products.js'
+import { registerPushTokenRoutes } from './routes/push-tokens.js'
 import { registerRestaurantOrderRoutes } from './routes/restaurant-orders.js'
 import { registerRestaurantReviewRoutes } from './routes/restaurant-reviews.js'
 import { registerRestaurantRoutes } from './routes/restaurants.js'
@@ -119,6 +120,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   registerPaymentRoutes(app, container)
   registerRestaurantOrderRoutes(app, container)
   registerDeliveryRoutes(app, container)
+  registerPushTokenRoutes(app, container)
   registerRestaurantReviewRoutes(app, container)
   registerAnalyticsRoutes(app, container)
   registerUploadRoutes(app, container)

@@ -1,4 +1,5 @@
 import type { DependencyContainer } from 'tsyringe'
+import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
 import type { ChangeOrderStatusUseCase } from '@/application/useCases/orders/ChangeOrderStatusUseCase.js'
 import type { DispatchOrderUseCase } from '@/application/useCases/orders/DispatchOrderUseCase.js'
 import type { ListRestaurantOrdersUseCase } from '@/application/useCases/orders/ListRestaurantOrdersUseCase.js'
@@ -7,6 +8,7 @@ import type { OrderStatus } from '@/domain/enums.js'
 import { restaurantScopeParamsSchema } from '@/schemas/common.js'
 import {
   dispatchOrderBodySchema,
+  orderStreamEventSchema,
   reasonBodySchema,
   restaurantOrderPageQuerySchema,
   restaurantOrderResponseSchema,
@@ -16,6 +18,9 @@ import {
 } from '@/schemas/orders.js'
 import type { App } from '../app.js'
 import { requireRestaurantUser } from '../plugins/auth.js'
+
+const HEARTBEAT_INTERVAL_MS = 25_000
+const RECONNECT_DELAY_MS = 3_000
 
 interface ITransitionRoute {
   path: string
@@ -40,6 +45,7 @@ export function registerRestaurantOrderRoutes(app: App, container: DependencyCon
   const listOrders = container.resolve<ListRestaurantOrdersUseCase>(
     TOKENS.ListRestaurantOrdersUseCase
   )
+  const orderStream = container.resolve<IOrderStream>(TOKENS.OrderStream)
   const changeStatus = container.resolve<ChangeOrderStatusUseCase>(TOKENS.ChangeOrderStatusUseCase)
   const dispatchOrder = container.resolve<DispatchOrderUseCase>(TOKENS.DispatchOrderUseCase)
 
@@ -62,6 +68,55 @@ export function registerRestaurantOrderRoutes(app: App, container: DependencyCon
       })
 
       return { ...result, items: result.items.map(toRestaurantOrderResponse) }
+    }
+  )
+
+  app.get(
+    '/restaurants/:restaurantId/orders/stream',
+    {
+      schema: {
+        tags: ['restaurant-orders'],
+        summary: 'Stream SSE dos pedidos do restaurante',
+        description:
+          'text/event-stream com os eventos ORDER_PLACED e ORDER_STATUS_CHANGED. O evento traz só o suficiente para o dashboard recarregar o pedido — nunca o código de entrega. O EventSource do navegador não envia cabeçalhos, então o dashboard precisa de um cliente SSE sobre fetch para mandar o Authorization.',
+        params: restaurantScopeParamsSchema,
+        response: { 200: orderStreamEventSchema }
+      },
+      preHandler: [app.authenticateRestaurantUser, app.requireMembership('OWNER')]
+    },
+    async (request, reply) => {
+      // Com hijack o Fastify sai do caminho e nada aqui é serializado por ele: o schema da
+      // resposta acima descreve o corpo de cada evento no OpenAPI, não o que é escrito no socket.
+      reply.hijack()
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      })
+
+      const send = (chunk: string): void => {
+        if (!reply.raw.writableEnded) {
+          reply.raw.write(chunk)
+        }
+      }
+
+      send(`retry: ${RECONNECT_DELAY_MS}\n\n`)
+
+      const unsubscribe = orderStream.subscribe(request.params.restaurantId, (event) => {
+        send(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      })
+
+      // Proxies e balanceadores fecham conexão ociosa; o comentário periódico a mantém viva.
+      const heartbeat = setInterval(() => send(': ping\n\n'), HEARTBEAT_INTERVAL_MS)
+
+      const close = (): void => {
+        clearInterval(heartbeat)
+        unsubscribe()
+      }
+
+      request.raw.on('close', close)
+      reply.raw.on('error', close)
     }
   )
 

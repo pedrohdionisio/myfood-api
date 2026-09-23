@@ -30,6 +30,9 @@ const envSchema = z.object({
   ABACATEPAY_WEBHOOK_SECRET: z.string().min(16),
   PAYMENT_PIX_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1800),
 
+  // Só é exigido pelo Expo quando a conta liga o modo de segurança reforçada no envio de push.
+  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+
   // Opcionais: sem elas o SDK resolve pela cadeia padrão (~/.aws/credentials, IAM role).
   // No container não há ~/.aws, então lá elas precisam vir do .env.
   AWS_ACCESS_KEY_ID: z.string().min(1).optional(),

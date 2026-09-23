@@ -1,5 +1,6 @@
 import { inject, injectable } from 'tsyringe'
 import type { IOrder, IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError, NotFoundError } from '@/domain/errors.js'
 import { assertCanTransition, timestampFieldsFor } from '@/domain/order-status.js'
@@ -14,7 +15,9 @@ export interface ICancelOrderInput {
 export class CancelOrderUseCase {
   constructor(
     @inject(TOKENS.OrdersRepository)
-    private readonly orders: IOrdersRepository
+    private readonly orders: IOrdersRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: ICancelOrderInput): Promise<IOrder> {
@@ -50,6 +53,8 @@ export class CancelOrderUseCase {
     if (!updated) {
       throw new NotFoundError(`Pedido ${orderId} desapareceu após o cancelamento.`)
     }
+
+    await this.notify.execute({ change: 'STATUS_CHANGED', actor: 'CUSTOMER', order: updated })
 
     return updated
   }

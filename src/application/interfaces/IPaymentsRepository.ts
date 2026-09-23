@@ -1,4 +1,5 @@
 import type { PaymentChargeStatus } from '@/domain/enums.js'
+import type { IOrderNotificationTarget } from './IOrdersRepository.js'
 
 export interface IPayment {
   id: string
@@ -56,9 +57,10 @@ export interface IPaymentsRepository {
 
   /**
    * Marca a cobrança como paga e leva o pedido de PENDING_PAYMENT para PENDING, com histórico e
-   * evento de outbox, tudo na mesma transação. `false` quando o evento já tinha sido processado.
+   * evento de outbox, tudo na mesma transação. Devolve o pedido afetado, para a notificação, ou
+   * `null` quando nada foi aplicado — evento repetido, cobrança já paga ou pedido fora do estado.
    */
-  confirm(data: IConfirmPaymentData): Promise<boolean>
+  confirm(data: IConfirmPaymentData): Promise<IOrderNotificationTarget | null>
 
   /** Idem para o estorno concluído: cobrança REFUNDED e orders.payment_status REFUNDED. */
   recordRefund(data: IRecordRefundData): Promise<boolean>
@@ -68,7 +70,7 @@ export interface IPaymentsRepository {
   listAwaitingRefund(limit: number): Promise<IPendingCharge[]>
 
   /** Expira a cobrança e cancela o pedido que ainda estiver em PENDING_PAYMENT. */
-  expire(chargeId: string): Promise<void>
+  expire(chargeId: string): Promise<IOrderNotificationTarget | null>
 
   markRefunded(chargeId: string): Promise<void>
 }

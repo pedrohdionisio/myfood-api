@@ -4,6 +4,7 @@ import type {
   IPaymentsRepository,
   IPendingCharge
 } from '@/application/interfaces/IPaymentsRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 
 const BATCH_SIZE = 20
@@ -27,7 +28,9 @@ export class SettlePendingChargesUseCase {
     @inject(TOKENS.PaymentsRepository)
     private readonly payments: IPaymentsRepository,
     @inject(TOKENS.PaymentGateway)
-    private readonly gateway: IPaymentGateway
+    private readonly gateway: IPaymentGateway,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(reporter: ISettleReporter): Promise<ISettleResult> {
@@ -40,7 +43,7 @@ export class SettlePendingChargesUseCase {
         const status = await this.gateway.getChargeStatus(charge.providerChargeId)
 
         if (status === 'PAID') {
-          const applied = await this.payments.confirm({
+          const confirmed = await this.payments.confirm({
             eventId: `reconciliation:${charge.providerChargeId}`,
             event: 'reconciliation.paid',
             payload: { chargeId: charge.providerChargeId, status },
@@ -49,17 +52,31 @@ export class SettlePendingChargesUseCase {
             receiptUrl: null
           })
 
-          if (applied) {
+          if (confirmed) {
             result.confirmed += 1
             reporter.onConfirmed(charge)
+
+            await this.notify.execute({
+              change: 'PAYMENT_CONFIRMED',
+              actor: 'SYSTEM',
+              order: confirmed
+            })
           }
 
           continue
         }
 
-        await this.payments.expire(charge.id)
+        const canceled = await this.payments.expire(charge.id)
         result.expired += 1
         reporter.onExpired(charge)
+
+        if (canceled) {
+          await this.notify.execute({
+            change: 'STATUS_CHANGED',
+            actor: 'SYSTEM',
+            order: canceled
+          })
+        }
       } catch (error) {
         reporter.onError(error, charge)
       }

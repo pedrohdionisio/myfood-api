@@ -31,6 +31,7 @@ import { TOKENS } from '@/di/tokens.js'
 import type { OrderEventType } from '@/domain/enums.js'
 import { ConflictError } from '@/domain/errors.js'
 import { uuidv7 } from '@/shared/uuid.js'
+import { ORDER_NOTIFICATION_COLUMNS } from './order-notification-columns.js'
 
 type Transaction = Parameters<Parameters<IDatabaseConnection['db']['transaction']>[0]>[0]
 
@@ -463,7 +464,7 @@ export class DrizzleOrdersRepository implements IOrdersRepository {
 
   async findDriverAssignment(orderId: string): Promise<IDriverAssignment | null> {
     const [row] = await this.database.db
-      .select({ status: orders.status, driverMemberId: orders.driverMemberId })
+      .select({ ...ORDER_NOTIFICATION_COLUMNS, driverMemberId: orders.driverMemberId })
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1)

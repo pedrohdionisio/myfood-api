@@ -1,6 +1,7 @@
 import { inject, injectable } from 'tsyringe'
 import type { IMembershipsRepository } from '@/application/interfaces/IMembershipsRepository.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { CONFIRMATION_WINDOW_MINUTES, MAX_FAILED_CONFIRMATIONS } from '@/domain/delivery.js'
 import { DomainError, NotFoundError, TooManyRequestsError } from '@/domain/errors.js'
@@ -18,7 +19,9 @@ export class ConfirmDeliveryUseCase {
     @inject(TOKENS.OrdersRepository)
     private readonly orders: IOrdersRepository,
     @inject(TOKENS.MembershipsRepository)
-    private readonly memberships: IMembershipsRepository
+    private readonly memberships: IMembershipsRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: IConfirmDeliveryInput): Promise<void> {
@@ -55,5 +58,11 @@ export class ConfirmDeliveryUseCase {
         'Código incorreto. Confira com o cliente e tente novamente.'
       )
     }
+
+    await this.notify.execute({
+      change: 'STATUS_CHANGED',
+      actor: 'DRIVER',
+      order: { ...assignment, status: 'DELIVERED' }
+    })
   }
 }

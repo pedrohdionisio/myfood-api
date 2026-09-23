@@ -277,8 +277,40 @@ Dashboard analytics read from aggregate tables, never from on-the-fly scans of `
 
 ## 11. Notifications and real-time
 
-- **Customers:** Expo push notification on every order status change, plus React Query refetching while an order is active.
-- **Restaurants:** new orders must alert the dashboard immediately. The MVP uses **SSE** (`GET /restaurants/:id/orders/stream`), which is one-directional — exactly what the dashboard needs — and works over plain HTTP. A WebSocket would force the transport decision now, and in-process WebSockets do not survive a move to Lambda.
+**Both channels hang off one place.** Every transition already ends in a use case holding the
+updated order, and each of them calls `NotifyOrderChangeUseCase` after the commit. That use case —
+not the eight call sites — decides what the restaurant sees and what the customer is told, which is
+why the rules below are stated once and hold everywhere.
+
+**Restaurants: SSE** (`GET /restaurants/:restaurantId/orders/stream`, D3). One-directional, which is
+exactly what the dashboard needs, and plain HTTP. A WebSocket would force the transport decision now,
+and in-process WebSockets do not survive a move to Lambda.
+
+- The event is a narrow DTO — `type`, `orderId`, `displayNumber`, `status`, `occurredAt` — and the
+  dashboard reloads the order through the normal route. Nothing else travels on the stream, which is
+  what keeps the delivery code out of it (rule 1).
+- An order in `PENDING_PAYMENT` is published to nobody: it does not exist for the restaurant (§12),
+  and the stream is the one place where that could have leaked before the listing filters ran.
+- **The stream lives in the memory of the API process.** It reaches the SSE connections open on that
+  instance and no others. Inside a worker it exists with no listeners, so an order confirmed by the
+  payments reconciliation (§12.4) reaches the dashboard on its next refetch, not through the stream.
+  A second API instance would need Postgres `LISTEN/NOTIFY` or Redis in place of the in-memory map;
+  the port (`IOrderStream`) is what that swap would touch.
+- `EventSource` cannot send headers, so the dashboard authenticates the stream with a fetch-based SSE
+  client. The token stays in `Authorization`, never in the query string, where it would be logged.
+
+**Customers: Expo push** on every status change, plus React Query refetching while an order is active.
+
+- The text comes from `customerNotificationFor` in the domain, one message per status, and **never
+  mentions the delivery code** (rule 1).
+- Nothing is sent to whoever caused the change: cancelling an order does not push "your order was
+  cancelled" back at the customer who just tapped it.
+- Tokens are registered by the app (`POST /me/push-tokens`) and dropped at logout
+  (`DELETE /me/push-tokens`); the token belongs to the device, so registering one that already exists
+  moves it to whoever is logged in now. A token Expo reports as `DeviceNotRegistered` is deleted.
+- **Push is best effort.** The gateway never rejects: it logs and returns, because the transition is
+  already committed and a failed notification must not turn a successful confirmation into a 500.
+  The app rereads the order when it opens, so a lost push is never a lost state.
 
 ## 12. Payments
 
@@ -369,6 +401,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
 | D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
 | D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email, delivered by SES (§4). |
+| D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a worker, and the outbox carries three aggregate events, not every transition (§11). |
 
 ## 14. Open questions
 

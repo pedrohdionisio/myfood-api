@@ -4,6 +4,7 @@ import type {
   IOrdersRepository,
   IRestaurantOrder
 } from '@/application/interfaces/IOrdersRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import { ConflictError, DomainError, NotFoundError } from '@/domain/errors.js'
 import { assertCanTransition, timestampFieldsFor } from '@/domain/order-status.js'
@@ -21,7 +22,9 @@ export class DispatchOrderUseCase {
     @inject(TOKENS.OrdersRepository)
     private readonly orders: IOrdersRepository,
     @inject(TOKENS.MembershipsRepository)
-    private readonly memberships: IMembershipsRepository
+    private readonly memberships: IMembershipsRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(input: IDispatchOrderInput): Promise<IRestaurantOrder> {
@@ -72,6 +75,8 @@ export class DispatchOrderUseCase {
     if (!updated) {
       throw new NotFoundError(`Pedido ${orderId} desapareceu após a transição.`)
     }
+
+    await this.notify.execute({ change: 'STATUS_CHANGED', actor: 'OWNER', order: updated })
 
     return updated
   }

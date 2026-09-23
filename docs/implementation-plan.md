@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 11 — Notifications and real-time. Phases 0–9 are done. Phase 10 (payments) is written but **unverified**: its end-to-end run is deliberately deferred to the app/dashboard phase.
+**Current phase:** Phase 12 — Hardening. Phases 0–9 and 11 are done. Phase 10 (payments) is written but **unverified**, and so is the push half of Phase 11: both end-to-end runs are deliberately deferred to the app/dashboard phase.
 
 ---
 
@@ -538,11 +538,47 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 
 ## Phase 11 — Notifications and real-time
 
-- [ ] `push_tokens` registration
-- [ ] Expo push on every status change — **the text never contains the delivery code** (rule 1)
-- [ ] `GET /restaurants/:id/orders/stream` over SSE (D3)
+- [x] `push_tokens` registration — `POST /me/push-tokens` and `DELETE /me/push-tokens`, escopadas
+      pelo token do cliente
+- [x] Expo push on every status change — **the text never contains the delivery code** (rule 1)
+- [x] `GET /restaurants/:restaurantId/orders/stream` over SSE (D3)
+- [x] `NotifyOrderChangeUseCase`: um único ponto chamado pelas oito transições, que decide o que vai
+      para o stream e o que vira push
+- [ ] **End-to-end run of the push** — depends on `myfood-app`: um `ExpoPushToken` real só sai de um
+      aparelho com o app instalado. O que está provado é `lint`, `typecheck`, a API subindo com a DI
+      nova, e o SSE respondendo 200 `text/event-stream` ao dono e 401 sem token
 
 **Done when:** a new order reaches an open stream (`curl -N`) without a refresh.
+
+### Notes from Phase 11
+
+- **Os dois avisos saem do mesmo lugar (D18).** Cada transição já terminava com o pedido atualizado
+  em mãos; o que faltava era um destino. `NotifyOrderChangeUseCase` recebe `{change, actor, order}` e
+  resolve stream e push, então as regras — o que o restaurante enxerga, o que o cliente lê — existem
+  uma vez só, e não oito.
+- **Pelo outbox não dava.** As conexões SSE vivem na memória do processo da API, e o worker que
+  consome a fila é outro processo: um evento publicado lá não teria como acordar o dashboard. O
+  outbox também carrega três eventos de agregado, não toda transição.
+- **O ator é parte da mensagem.** Sem ele, quem toca em "cancelar" recebe um push dizendo que o
+  pedido foi cancelado. `customerNotificationFor` devolve `null` quando o ator é o próprio cliente,
+  o que também resolve o pedido recém-feito sem precisar de caso especial.
+- **`PENDING` chega por dois caminhos** — checkout em dinheiro e Pix confirmado — e só o segundo
+  merece push. Por isso o `change` (`PLACED`, `PAYMENT_CONFIRMED`, `STATUS_CHANGED`) entra junto do
+  status: o status sozinho não distingue os dois.
+- **`confirm()` e `expire()` do repositório de pagamentos passaram a devolver o pedido afetado** em
+  vez de `boolean`/`void`. Quem confirma o Pix precisa saber qual pedido nasceu para o restaurante, e
+  a transação já tinha o dado no `RETURNING`.
+- **`reply.hijack()` desliga a serialização do Fastify.** O schema de resposta declarado na rota do
+  stream documenta o corpo de cada evento no OpenAPI; o que vai para o socket é escrito à mão. É a
+  única rota do projeto onde o schema não é também a garantia — e o DTO estreito é que segura a
+  regra 1 ali.
+- **`EventSource` não manda cabeçalho**, então o dashboard vai precisar de um cliente SSE sobre
+  `fetch`. Token em query string não foi considerado: o Pino redige `authorization`, não a URL.
+- **Verificado à mão:** API subindo com a DI nova; `/restaurants/:id/orders/stream` respondendo
+  `200 text/event-stream` com o access token do dono e `401` sem token; `POST /me/push-tokens`
+  recusando token fora do formato do Expo com 422; as duas rotas novas no `/docs/json`. O evento
+  chegando a um stream aberto ficou de fora: o restaurante de teste não abre terça-feira, então não
+  havia checkout possível na hora.
 
 ---
 

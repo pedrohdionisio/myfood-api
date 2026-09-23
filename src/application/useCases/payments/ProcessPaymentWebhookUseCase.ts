@@ -1,5 +1,6 @@
 import { inject, injectable } from 'tsyringe'
 import type { IPaymentsRepository } from '@/application/interfaces/IPaymentsRepository.js'
+import type { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 
 export interface IPaymentWebhookEvent {
@@ -21,7 +22,9 @@ export type PaymentWebhookOutcome = 'APPLIED' | 'DUPLICATE' | 'IGNORED'
 export class ProcessPaymentWebhookUseCase {
   constructor(
     @inject(TOKENS.PaymentsRepository)
-    private readonly payments: IPaymentsRepository
+    private readonly payments: IPaymentsRepository,
+    @inject(TOKENS.NotifyOrderChangeUseCase)
+    private readonly notify: NotifyOrderChangeUseCase
   ) {}
 
   async execute(payload: IPaymentWebhookEvent): Promise<PaymentWebhookOutcome> {
@@ -32,7 +35,7 @@ export class ProcessPaymentWebhookUseCase {
     const eventId = payload.id ?? `${payload.event}:${charge.id}`
 
     if (payload.event === 'transparent.completed') {
-      const applied = await this.payments.confirm({
+      const confirmed = await this.payments.confirm({
         eventId,
         event: payload.event,
         payload,
@@ -41,7 +44,18 @@ export class ProcessPaymentWebhookUseCase {
         receiptUrl: charge.receiptUrl ?? null
       })
 
-      return applied ? 'APPLIED' : 'DUPLICATE'
+      if (!confirmed) {
+        return 'DUPLICATE'
+      }
+
+      // É aqui que o pedido online nasce para o restaurante, então é aqui que o stream avisa.
+      await this.notify.execute({
+        change: 'PAYMENT_CONFIRMED',
+        actor: 'SYSTEM',
+        order: confirmed
+      })
+
+      return 'APPLIED'
     }
 
     if (payload.event === 'transparent.refunded') {

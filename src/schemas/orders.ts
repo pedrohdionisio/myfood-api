@@ -175,6 +175,16 @@ export function toCustomerOrderSummaryResponse(
   }
 }
 
+// Contrato do SSE de /restaurants/:restaurantId/orders/stream. Campos de sobra não entram: o
+// dashboard recarrega o pedido pela rota normal depois do aviso.
+export const orderStreamEventSchema = z.object({
+  type: z.enum(['ORDER_PLACED', 'ORDER_STATUS_CHANGED']),
+  orderId: z.uuid(),
+  displayNumber: z.number().int(),
+  status: z.enum(ORDER_STATUSES),
+  occurredAt: z.iso.datetime()
+})
+
 export function toRestaurantOrderResponse(
   order: IRestaurantOrder
 ): z.infer<typeof restaurantOrderResponseSchema> {

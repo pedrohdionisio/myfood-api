@@ -75,6 +75,8 @@ import { ListProductsUseCase } from '@/application/useCases/products/ListProduct
 import { ReorderProductsUseCase } from '@/application/useCases/products/ReorderProductsUseCase.js'
 import { SetProductAvailabilityUseCase } from '@/application/useCases/products/SetProductAvailabilityUseCase.js'
 import { UpdateProductUseCase } from '@/application/useCases/products/UpdateProductUseCase.js'
+import { UpdateCustomerProfileUseCase } from '@/application/useCases/profile/UpdateCustomerProfileUseCase.js'
+import { UpdateRestaurantUserProfileUseCase } from '@/application/useCases/profile/UpdateRestaurantUserProfileUseCase.js'
 import { RegisterPushTokenUseCase } from '@/application/useCases/pushTokens/RegisterPushTokenUseCase.js'
 import { UnregisterPushTokenUseCase } from '@/application/useCases/pushTokens/UnregisterPushTokenUseCase.js'
 import { ActivateRestaurantUseCase } from '@/application/useCases/restaurants/ActivateRestaurantUseCase.js'
@@ -346,6 +348,18 @@ export function buildContainer(env: Env): DependencyContainer {
   container.register(
     TOKENS.SetAcceptingOrdersUseCase,
     { useClass: SetAcceptingOrdersUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateCustomerProfileUseCase,
+    { useClass: UpdateCustomerProfileUseCase },
+    { lifecycle: Lifecycle.Singleton }
+  )
+
+  container.register(
+    TOKENS.UpdateRestaurantUserProfileUseCase,
+    { useClass: UpdateRestaurantUserProfileUseCase },
     { lifecycle: Lifecycle.Singleton }
   )
 

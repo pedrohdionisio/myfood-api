@@ -6,6 +6,8 @@ import type { SignInCustomerUseCase } from '@/application/useCases/auth/SignInCu
 import type { SignInRestaurantUserUseCase } from '@/application/useCases/auth/SignInRestaurantUserUseCase.js'
 import type { SignUpCustomerUseCase } from '@/application/useCases/auth/SignUpCustomerUseCase.js'
 import type { SignUpRestaurantUserUseCase } from '@/application/useCases/auth/SignUpRestaurantUserUseCase.js'
+import type { UpdateCustomerProfileUseCase } from '@/application/useCases/profile/UpdateCustomerProfileUseCase.js'
+import type { UpdateRestaurantUserProfileUseCase } from '@/application/useCases/profile/UpdateRestaurantUserProfileUseCase.js'
 import { TOKENS } from '@/di/tokens.js'
 import {
   customerProfileResponseSchema,
@@ -19,7 +21,8 @@ import {
   restaurantUserSessionResponseSchema,
   signInBodySchema,
   signUpCustomerBodySchema,
-  signUpRestaurantUserBodySchema
+  signUpRestaurantUserBodySchema,
+  updateProfileBodySchema
 } from '@/schemas/auth.js'
 import type { App } from '../app.js'
 import { requireCustomer, requireRestaurantUser } from '../plugins/auth.js'
@@ -34,6 +37,9 @@ const PASSWORD_RECOVERY_RATE_LIMIT = { rateLimit: { max: 5, timeWindow: '1 minut
 
 export function registerCustomerAuthRoutes(app: App, container: DependencyContainer): void {
   const signUp = container.resolve<SignUpCustomerUseCase>(TOKENS.SignUpCustomerUseCase)
+  const updateProfile = container.resolve<UpdateCustomerProfileUseCase>(
+    TOKENS.UpdateCustomerProfileUseCase
+  )
   const signIn = container.resolve<SignInCustomerUseCase>(TOKENS.SignInCustomerUseCase)
   const refresh = container.resolve<RefreshSessionUseCase>(TOKENS.RefreshCustomerSessionUseCase)
   const forgotPassword = container.resolve<ForgotPasswordUseCase>(
@@ -129,15 +135,32 @@ export function registerCustomerAuthRoutes(app: App, container: DependencyContai
       preHandler: [app.authenticateCustomer]
     },
     async (request) => {
-      const { id, name, email } = requireCustomer(request)
+      const { id, name, email, phone } = requireCustomer(request)
 
-      return { id, name, email }
+      return { id, name, email, phone }
     }
+  )
+
+  app.patch(
+    '/customers/me',
+    {
+      schema: {
+        tags: ['customers'],
+        summary: 'Cliente edita o próprio nome e telefone',
+        body: updateProfileBodySchema,
+        response: { 200: customerProfileResponseSchema }
+      },
+      preHandler: [app.authenticateCustomer]
+    },
+    async (request) => updateProfile.execute(requireCustomer(request).id, request.body)
   )
 }
 
 export function registerRestaurantAuthRoutes(app: App, container: DependencyContainer): void {
   const signUp = container.resolve<SignUpRestaurantUserUseCase>(TOKENS.SignUpRestaurantUserUseCase)
+  const updateProfile = container.resolve<UpdateRestaurantUserProfileUseCase>(
+    TOKENS.UpdateRestaurantUserProfileUseCase
+  )
   const signIn = container.resolve<SignInRestaurantUserUseCase>(TOKENS.SignInRestaurantUserUseCase)
   const refresh = container.resolve<RefreshSessionUseCase>(TOKENS.RefreshRestaurantSessionUseCase)
   const forgotPassword = container.resolve<ForgotPasswordUseCase>(
@@ -235,9 +258,23 @@ export function registerRestaurantAuthRoutes(app: App, container: DependencyCont
       preHandler: [app.authenticateRestaurantUser]
     },
     async (request) => {
-      const { id, name, email } = requireRestaurantUser(request)
+      const { id, name, email, phone } = requireRestaurantUser(request)
 
-      return { id, name, email }
+      return { id, name, email, phone }
     }
+  )
+
+  app.patch(
+    '/restaurant-users/me',
+    {
+      schema: {
+        tags: ['restaurant-users'],
+        summary: 'Usuário de restaurante edita o próprio nome e telefone',
+        body: updateProfileBodySchema,
+        response: { 200: restaurantUserProfileResponseSchema }
+      },
+      preHandler: [app.authenticateRestaurantUser]
+    },
+    async (request) => updateProfile.execute(requireRestaurantUser(request).id, request.body)
   )
 }

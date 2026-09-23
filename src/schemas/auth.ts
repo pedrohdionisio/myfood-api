@@ -43,7 +43,8 @@ const sessionSchema = z.object({
 const customerSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  email: z.string()
+  email: z.string(),
+  phone: z.string().nullable()
 })
 
 export const customerSessionResponseSchema = z.object({
@@ -59,12 +60,23 @@ export const refreshedSessionResponseSchema = z.object({
 
 export const customerProfileResponseSchema = customerSchema
 
+// O e-mail fica de fora: ele é o login no Cognito, e trocá-lo exige verificar o novo endereço.
+export const updateProfileBodySchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    phone: z.string().min(8).max(20).nullable().optional()
+  })
+  .refine((body) => body.name !== undefined || body.phone !== undefined, {
+    message: 'Informe name ou phone.'
+  })
+
 export const signUpRestaurantUserBodySchema = signUpCustomerBodySchema
 
 const restaurantUserSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  email: z.string()
+  email: z.string(),
+  phone: z.string().nullable()
 })
 
 export const restaurantUserSessionResponseSchema = z.object({

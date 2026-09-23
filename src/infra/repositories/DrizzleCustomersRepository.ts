@@ -3,12 +3,13 @@ import { inject, injectable } from 'tsyringe'
 import type {
   IAuthenticatedCustomer,
   ICreateCustomerData,
-  ICustomersRepository
+  ICustomersRepository,
+  IUpdateCustomerProfileData
 } from '@/application/interfaces/ICustomersRepository.js'
 import type { IDatabaseConnection } from '@/db/client.js'
 import { customers } from '@/db/schema/index.js'
 import { TOKENS } from '@/di/tokens.js'
-import { ConflictError } from '@/domain/errors.js'
+import { ConflictError, NotFoundError } from '@/domain/errors.js'
 import { violatesUniqueConstraint } from './unique-violation.js'
 
 const DUPLICATE_EMAIL_CONSTRAINT = 'customers_email_unique'
@@ -17,7 +18,8 @@ const SELECTION = {
   id: customers.id,
   cognitoSub: customers.cognitoSub,
   name: customers.name,
-  email: customers.email
+  email: customers.email,
+  phone: customers.phone
 }
 
 @injectable()
@@ -42,6 +44,23 @@ export class DrizzleCustomersRepository implements ICustomersRepository {
       .limit(1)
 
     return row ?? null
+  }
+
+  async updateProfile(
+    id: string,
+    data: IUpdateCustomerProfileData
+  ): Promise<IAuthenticatedCustomer> {
+    const [row] = await this.database.db
+      .update(customers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(customers.id, id))
+      .returning(SELECTION)
+
+    if (!row) {
+      throw new NotFoundError(`Usuário ${id} não encontrado em customers.`)
+    }
+
+    return row
   }
 
   async create(data: ICreateCustomerData): Promise<IAuthenticatedCustomer> {

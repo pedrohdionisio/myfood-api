@@ -126,6 +126,10 @@ No business logic. The goal is a repository where the next phase can be written 
 - [x] `PATCH /restaurants/:restaurantId/members/:memberId` — not in the original list; rule 5 read
       `active` on every request and nothing ever wrote it, so there was no way to switch a member's
       access off. Takes `role`, `active` or both
+- [x] `PATCH /customers/me` e `PATCH /restaurant-users/me` — **adicionadas depois**, para o app
+      editar nome e telefone. O `phone` entrou nos perfis e nas respostas de sessão, o que é
+      adição ao contrato. O e-mail fica de fora: é o login no Cognito, e trocá-lo exige verificar
+      o endereço novo. O `name` do Cognito não é atualizado — o banco é a fonte do nome exibido
 - [x] `POST /auth/{customers,restaurant-users}/forgot-password | reset-password` — **added during
       Phase 11**, not in the original list: sign-in existed with no way back from a lost password.
       Cognito owns the code (D17); the e-mail body is a react-email template rendered by a

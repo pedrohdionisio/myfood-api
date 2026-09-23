@@ -182,7 +182,8 @@ export class DrizzleMembershipsRepository implements IMembershipsRepository {
           id: restaurantUsers.id,
           cognitoSub: restaurantUsers.cognitoSub,
           name: restaurantUsers.name,
-          email: restaurantUsers.email
+          email: restaurantUsers.email,
+          phone: restaurantUsers.phone
         })
 
         if (!createdUser) {

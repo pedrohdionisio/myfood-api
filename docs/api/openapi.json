@@ -258,12 +258,17 @@
                         },
                         "email": {
                           "type": "string"
+                        },
+                        "phone": {
+                          "nullable": true,
+                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "phone"
                       ],
                       "additionalProperties": false
                     },
@@ -445,12 +450,17 @@
                         },
                         "email": {
                           "type": "string"
+                        },
+                        "phone": {
+                          "nullable": true,
+                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "phone"
                       ],
                       "additionalProperties": false
                     },
@@ -1036,12 +1046,17 @@
                     },
                     "email": {
                       "type": "string"
+                    },
+                    "phone": {
+                      "nullable": true,
+                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "name",
-                    "email"
+                    "email",
+                    "phone"
                   ],
                   "additionalProperties": false
                 }
@@ -1073,6 +1088,192 @@
                   ],
                   "additionalProperties": false,
                   "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições excedido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Limite de requisições excedido."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha inesperada. O requestId da resposta acha a linha no log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Falha inesperada. O requestId da resposta acha a linha no log."
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Cliente edita o próprio nome e telefone",
+        "tags": [
+          "customers"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "phone": {
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "customerToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "phone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR)."
                 }
               }
             }
@@ -1203,12 +1404,17 @@
                         },
                         "email": {
                           "type": "string"
+                        },
+                        "phone": {
+                          "nullable": true,
+                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "phone"
                       ],
                       "additionalProperties": false
                     },
@@ -1390,12 +1596,17 @@
                         },
                         "email": {
                           "type": "string"
+                        },
+                        "phone": {
+                          "nullable": true,
+                          "type": "string"
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "phone"
                       ],
                       "additionalProperties": false
                     },
@@ -1981,12 +2192,17 @@
                     },
                     "email": {
                       "type": "string"
+                    },
+                    "phone": {
+                      "nullable": true,
+                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "name",
-                    "email"
+                    "email",
+                    "phone"
                   ],
                   "additionalProperties": false
                 }
@@ -2018,6 +2234,192 @@
                   ],
                   "additionalProperties": false,
                   "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limite de requisições excedido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Limite de requisições excedido."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha inesperada. O requestId da resposta acha a linha no log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Falha inesperada. O requestId da resposta acha a linha no log."
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Usuário de restaurante edita o próprio nome e telefone",
+        "tags": [
+          "restaurant-users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "phone": {
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "restaurantToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "phone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Token ausente, de outro pool, expirado, ou sem usuário no banco."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Campos inválidos (VALIDATION_ERROR) ou regra de negócio recusada (DOMAIN_ERROR)."
                 }
               }
             }

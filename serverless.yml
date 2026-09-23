@@ -205,6 +205,14 @@ resources:
               AllowedOrigins: ['*']
               AllowedHeaders: ['*']
               MaxAge: 3000
+        LifecycleConfiguration:
+          Rules:
+            # Precisa durar mais que a retenção da ImageProcessingDLQ (14 dias): reprocessar uma
+            # mensagem da DLQ lê o original, e ele não pode ter expirado antes.
+            - Id: ExpireOriginals
+              Status: Enabled
+              Prefix: originals/
+              ExpirationInDays: 30
         NotificationConfiguration:
           QueueConfigurations:
             - Event: s3:ObjectCreated:*

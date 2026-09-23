@@ -22,7 +22,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "upload:image": "tsx scripts/upload-image.ts"
+    "upload:image": "tsx scripts/upload-image.ts",
+    "db:seed": "tsx scripts/seed/index.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1133.0",

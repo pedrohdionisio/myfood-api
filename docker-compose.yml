@@ -39,6 +39,8 @@ services:
       # Preserva o node_modules do container: os binários nativos do host são macOS/arm64
       # e não rodam no alpine/linux.
       - /app/node_modules
+      # Sem chaves no .env, o SDK da AWS lê as credenciais do perfil default do host.
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,6 +62,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -80,6 +83,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,6 +105,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres:
         condition: service_healthy

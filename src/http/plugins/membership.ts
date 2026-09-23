@@ -35,7 +35,9 @@ export function registerMembership(app: App, container: DependencyContainer): vo
   app.decorateRequest('membership', undefined)
 
   app.decorate('requireMembership', (...allowed: MemberRole[]): preHandlerHookHandler => {
-    return async (request) => {
+    // O nome não é decorativo: o transform do OpenAPI identifica a rota escopada por vínculo
+    // por ele, e é o que faz o 403 aparecer na documentação sem ninguém declarar.
+    return async function requireMembershipPreHandler(request) {
       const user = requireRestaurantUser(request)
       const { restaurantId } = restaurantScopeParamsSchema.parse(request.params)
 

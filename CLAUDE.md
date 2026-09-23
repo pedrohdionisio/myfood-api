@@ -86,7 +86,7 @@ states a fact about that project's infrastructure rather than this one's.
 - Money is always `integer` cents, with a `_cents` suffix. Never use floats for money.
 - Timestamps are `timestamptz`. Business-day aggregation uses the `America/Sao_Paulo` time zone.
 - Every route declares Zod schemas for params, query, body **and response**. Responses are serialized only from declared fields.
-- The OpenAPI spec is generated from route schemas and consumed by the frontends to generate typed clients. Treat response schema changes as contract changes.
+- The OpenAPI spec is generated from route schemas and served at `/docs`. The two frontends write their HTTP modules by hand against it — nobody generates a client — so the spec is the written contract, not a code source. Treat response schema changes as contract changes anyway: `myfood-dashboard` and `myfood-app` already consume these routes.
 - Products, categories and anything referenced by past orders are archived (`archived_at`), never deleted.
 
 ## Authentication

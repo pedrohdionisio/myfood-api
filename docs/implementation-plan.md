@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 12 — Hardening. Phases 0–9 and 11 are done. Phase 10 (payments) is written but **unverified**, and so is the push half of Phase 11: both end-to-end runs are deliberately deferred to the app/dashboard phase.
+**Current phase:** Phase 12 — Hardening, with two end-to-end runs pending from earlier phases. Phases 0–9 and 11 are done. Phase 10 (payments) is written but **unverified**, and so is the push half of Phase 11. Both were waiting on the frontends, which now exist — the two runs are the next real work, not a later phase.
 
 ---
 
@@ -514,9 +514,11 @@ reconciliation decision (D16) are what shape everything here.
 - [x] Refund on cancel/reject: the charge goes to `REFUND_PENDING` inside the same transaction
 - [x] `payments` worker: expires charges (**checking the gateway first**), cancels the order, drains refunds
 - [x] `docs/`, `.env.example`, compose service, `pnpm worker:payments`
-- [ ] **End-to-end run** — deferred until `myfood-app` and `myfood-dashboard` exist, so the flow is
-      exercised through the interfaces instead of through loose requests. **Nothing here has ever
-      run:** what is proven is `lint`, `typecheck`, the API booting and the schema applied.
+- [ ] **End-to-end run** — **unblocked since 2026-09-22**: `myfood-app` and `myfood-dashboard` exist,
+      and the app already has `Checkout`, `Payment` and `Orders` screens plus a `payment` module, so
+      the flow can finally be exercised through the interfaces instead of through loose requests.
+      **Nothing here has ever run:** what is proven is `lint`, `typecheck`, the API booting and the
+      schema applied.
 
 **Manual setup (the user's side):** account and Dev-mode key → `.env` → an HTTPS tunnel
 (`cloudflared tunnel --url http://localhost:3333`) → webhook registered in the dashboard with the
@@ -544,9 +546,12 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 - [x] `GET /restaurants/:restaurantId/orders/stream` over SSE (D3)
 - [x] `NotifyOrderChangeUseCase`: um único ponto chamado pelas oito transições, que decide o que vai
       para o stream e o que vira push
-- [ ] **End-to-end run of the push** — depends on `myfood-app`: um `ExpoPushToken` real só sai de um
-      aparelho com o app instalado. O que está provado é `lint`, `typecheck`, a API subindo com a DI
-      nova, e o SSE respondendo 200 `text/event-stream` ao dono e 401 sem token
+- [ ] **End-to-end run of the push** — falta o lado do app: um `ExpoPushToken` real só sai de um
+      aparelho com o app instalado, chamando `POST /me/push-tokens`. O `myfood-app` existe, então é
+      trabalho de lá, não espera de fase. O que está provado aqui é `lint`, `typecheck`, a API
+      subindo com a DI nova, e o SSE respondendo 200 `text/event-stream` ao dono e 401 sem token
+- [ ] **SSE consumido pelo dashboard** — mesma situação: a rota está de pé, falta o cliente SSE sobre
+      `fetch` no `myfood-dashboard`
 
 **Done when:** a new order reaches an open stream (`curl -N`) without a refresh.
 
@@ -584,12 +589,46 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 
 ## Phase 12 — Hardening
 
-- [ ] OpenAPI pass: `operationId`s, tags, examples, error shapes — this is the frontends' contract
-- [ ] Rate limits on auth, checkout and delivery confirmation
-- [ ] CI: lint and typecheck
+- [x] OpenAPI pass, part one — o documento em si:
+  - [x] `info.description` com o modelo de autenticação, o catálogo de erros, as convenções e a
+        garantia do código de entrega
+  - [x] Tags descritas, uma por recurso
+  - [x] `securitySchemes` por pool (`customerToken`, `restaurantToken`), aplicados por operação
+  - [x] Erros comuns (401, 403, 422, 429, 500) deduzidos dos preHandlers e do schema de cada rota
+        pelo `transform`, sem tocar no serializador
+  - [x] `pnpm docs:openapi` → `docs/api/openapi.json` e uma página autocontida com Scalar
+  - [ ] Descrições e exemplos rota a rota, e os 404/409 que dependem do caso — **deixado para o
+        fim de propósito**: é conteúdo que envelhece a cada rota que ainda mudar, então entra
+        quando o resto estiver fechado, junto com a publicação
+  - [ ] ~~`operationId`s~~ — sem valor por ora: os dois frontends escrevem o cliente à mão, e
+        `operationId` só nomeia função gerada. Retomar se um dia gerarem
+- [ ] Rate limits on checkout and delivery confirmation (auth e recuperação de senha já têm)
+- [ ] CI: lint e typecheck, e regerar `docs/api/` — precisa de variáveis de ambiente falsas, porque
+      `generate-openapi.ts` passa por `config/env.ts`
 - [ ] README covering setup, the `serverless deploy` step and required environment variables
+- [ ] Publicar `docs/api/` (GitHub Pages) — combinado de tratar junto com o deploy da API
 
 **Done when:** a clean clone reaches a running API by following the README alone.
+
+### Notes from Phase 12
+
+- **O spec é derivado do mesmo Zod que roda**, então a única forma de ele mentir é sobre o que o
+  Fastify não usa em runtime: nome da operação, erros, exemplos. Foi por isso que os erros comuns
+  viraram dedução no `transform` em vez de declaração rota a rota — o que é estrutural fica correto
+  sozinho quando alguém criar a rota 78.
+- **Os preHandlers ganharam nome** (`authenticateCustomer`, `authenticateRestaurantUser`,
+  `requireMembershipPreHandler`) porque é por `preHandler.name` que o `transform` sabe se a operação
+  exige token e vínculo. Renomear um deles silenciosamente tira o 401 ou o 403 da documentação.
+- **Os erros entram só no documento, nunca no schema da rota.** Declarar resposta de erro no schema
+  faria o Fastify serializar as respostas de erro também, e um descasamento ali transformaria um 409
+  em 500 — risco sem retorno.
+- **A página é autocontida**: o spec vai embutido, então ela abre com duplo clique e publicar é
+  copiar a pasta. Sem isso, `fetch` de `openapi.json` em `file://` esbarra em CORS.
+- **Verificado no documento gerado:** 77 operações; `POST .../confirm` com `restaurantToken`, 401,
+  403, 422, 429 e 500; `/health` sem 429 (rate limit desligado) e sem 422 (não recebe entrada);
+  `forgot-password` sem `security` e com 429. E `deliveryCode` aparece em exatamente três
+  operações — `POST /orders`, `GET /orders/:orderId` e `POST /orders/:orderId/cancel` —, as três do
+  pedido do próprio cliente (regra 1).
 
 ---
 

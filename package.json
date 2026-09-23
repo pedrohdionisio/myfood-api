@@ -13,6 +13,7 @@
     "worker:outbox": "tsx watch src/workers/outbox-publisher.ts",
     "worker:payments": "tsx watch src/workers/payments.ts",
     "email:dev": "email dev --dir src/infra/emails/templates",
+    "docs:openapi": "tsx scripts/generate-openapi.ts",
     "layer:sharp": "./scripts/build-layers.sh",
     "deploy": "pnpm layer:sharp && pnpm dlx serverless deploy",
     "lint": "biome check .",

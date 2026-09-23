@@ -80,35 +80,41 @@ export function registerAuth(app: App, container: DependencyContainer): void {
   app.decorateRequest('customer', undefined)
   app.decorateRequest('restaurantUser', undefined)
 
-  app.decorate('authenticateCustomer', async (request: FastifyRequest) => {
-    const payload = await verify(request, customerVerifier, 'customer')
-    const customer = await customersRepository.findByCognitoSub(payload.sub)
+  app.decorate(
+    'authenticateCustomer',
+    async function authenticateCustomer(request: FastifyRequest) {
+      const payload = await verify(request, customerVerifier, 'customer')
+      const customer = await customersRepository.findByCognitoSub(payload.sub)
 
-    if (!customer) {
-      request.log.warn({ sub: payload.sub }, 'token válido sem customer correspondente')
+      if (!customer) {
+        request.log.warn({ sub: payload.sub }, 'token válido sem customer correspondente')
 
-      throw new UnauthorizedError(
-        'Token válido, mas sem customer no banco.',
-        'Finalize seu cadastro para continuar.'
-      )
+        throw new UnauthorizedError(
+          'Token válido, mas sem customer no banco.',
+          'Finalize seu cadastro para continuar.'
+        )
+      }
+
+      request.customer = customer
     }
+  )
 
-    request.customer = customer
-  })
+  app.decorate(
+    'authenticateRestaurantUser',
+    async function authenticateRestaurantUser(request: FastifyRequest) {
+      const payload = await verify(request, restaurantVerifier, 'restaurant')
+      const user = await restaurantUsersRepository.findByCognitoSub(payload.sub)
 
-  app.decorate('authenticateRestaurantUser', async (request: FastifyRequest) => {
-    const payload = await verify(request, restaurantVerifier, 'restaurant')
-    const user = await restaurantUsersRepository.findByCognitoSub(payload.sub)
+      if (!user) {
+        request.log.warn({ sub: payload.sub }, 'token válido sem restaurant_user correspondente')
 
-    if (!user) {
-      request.log.warn({ sub: payload.sub }, 'token válido sem restaurant_user correspondente')
+        throw new UnauthorizedError(
+          'Token válido, mas sem restaurant_user no banco.',
+          'Finalize seu cadastro para continuar.'
+        )
+      }
 
-      throw new UnauthorizedError(
-        'Token válido, mas sem restaurant_user no banco.',
-        'Finalize seu cadastro para continuar.'
-      )
+      request.restaurantUser = user
     }
-
-    request.restaurantUser = user
-  })
+  )
 }

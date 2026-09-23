@@ -15,6 +15,9 @@ customer holds.
 | [myfood-dashboard](https://github.com/pedrohdionisio/myfood-dashboard) | React dashboard for restaurant owners |
 | [myfood-app](https://github.com/pedrohdionisio/myfood-app) | React Native (Expo) app for customers and drivers |
 
+**[Browse the API reference →](https://pedrohdionisio.github.io/myfood-api/api/)** — every route,
+schema and error, generated from the code.
+
 ## Contents
 
 - [Highlights](#highlights)
@@ -156,8 +159,8 @@ the whole application through its HTTP layer — sign-up, menu, checkout, the ki
 confirmation, Pix webhooks, analytics and the SSE stream — with Cognito, S3, AbacatePay and Expo
 replaced by in-memory fakes.
 
-The API reference is generated from the route schemas: open
-[`docs/api/index.html`](docs/api/index.html) in a browser, or `/docs` on a running API.
+The [API reference](https://pedrohdionisio.github.io/myfood-api/api/) is generated from the route
+schemas and published to GitHub Pages; it is also served at `/docs` on a running API.
 
 ## Running the full stack
 

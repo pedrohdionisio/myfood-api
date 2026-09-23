@@ -555,8 +555,12 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
       aparelho com o app instalado, chamando `POST /me/push-tokens`. O `myfood-app` existe, então é
       trabalho de lá, não espera de fase. O que está provado aqui é `lint`, `typecheck`, a API
       subindo com a DI nova, e o SSE respondendo 200 `text/event-stream` ao dono e 401 sem token
-- [ ] **SSE consumido pelo dashboard** — mesma situação: a rota está de pé, falta o cliente SSE sobre
-      `fetch` no `myfood-dashboard`
+- [x] **SSE consumido pelo dashboard** — cliente SSE sobre `fetch` no `myfood-dashboard`
+      (`data/libs/openEventStream.ts`), que reaproveita o refresh de token do axios. Escrever o
+      cliente revelou que a rota **nunca tinha servido um navegador**: com `reply.hijack()`, os
+      cabeçalhos do `@fastify/cors` ficavam na reply e não iam para o socket, e o `curl` da
+      verificação anterior não aplica CORS. A rota agora copia os cabeçalhos da reply para o
+      `raw` antes do `writeHead`
 
 **Done when:** a new order reaches an open stream (`curl -N`) without a refresh.
 

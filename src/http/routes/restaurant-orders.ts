@@ -88,6 +88,14 @@ export function registerRestaurantOrderRoutes(app: App, container: DependencyCon
       // Com hijack o Fastify sai do caminho e nada aqui é serializado por ele: o schema da
       // resposta acima descreve o corpo de cada evento no OpenAPI, não o que é escrito no socket.
       reply.hijack()
+      // Com hijack, os cabeçalhos que o cors e o helmet puseram na reply não vão para o socket.
+      // Sem repassá-los, o navegador bloqueia o stream vindo de outra origem.
+      for (const [name, value] of Object.entries(reply.getHeaders())) {
+        if (value !== undefined) {
+          reply.raw.setHeader(name, value)
+        }
+      }
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',

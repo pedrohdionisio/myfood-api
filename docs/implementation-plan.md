@@ -4,7 +4,7 @@ Step-by-step build order. Read `architecture.md` for the *why* behind each decis
 
 **Review this file at the end of every phase:** check the boxes, record anything that turned out differently, and re-read the next phase before starting it.
 
-**Current phase:** Phase 12 — Hardening (CI, README, publishing `docs/api/`). Phases 0–9, 11 and 13 are done. Phase 10 (payments) and the push half of Phase 11 pass the feature suite against fakes, but still need one end-to-end run against AbacatePay and Expo from the frontends.
+**Current phase:** Phase 12 — Hardening (README, publishing `docs/api/`). Phases 0–9, 11 and 13 are done. Phase 10 (payments) and the push half of Phase 11 pass the feature suite against fakes, but still need one end-to-end run against AbacatePay and Expo from the frontends.
 
 ---
 
@@ -620,8 +620,11 @@ payload is in `payment_webhook_events`. Same for the charge id prefix: creation 
 - [x] `Idempotency-Key` confere o corpo e vence em 24h — as duas lacunas deixadas na Fase 6.
       Migration `0014` (`request_hash`); a limpeza de chave vencida é feita ao reivindicá-la de
       novo, sem job (architecture.md §7.4)
-- [ ] CI: lint, typecheck e `pnpm test` (o runner do GitHub já tem Docker), e regerar `docs/api/` — precisa de variáveis de ambiente falsas, porque
-      `generate-openapi.ts` passa por `config/env.ts`
+- [x] CI (`.github/workflows/ci.yml`, a cada push na `main` e em pull request): lint, typecheck,
+      migrations batendo com o schema (`db:generate` não pode gerar arquivo), `docs/api/` batendo
+      com as rotas (`docs:openapi` não pode gerar diff) e `pnpm test` — o runner do GitHub já tem
+      Docker para o Testcontainers. As variáveis de ambiente são falsas: nenhum passo fala com AWS,
+      AbacatePay ou banco fora do container dos testes
 - [ ] README covering setup, the `serverless deploy` step and required environment variables
 - [ ] Publicar `docs/api/` (GitHub Pages) — combinado de tratar junto com o deploy da API
 

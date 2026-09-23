@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      AWS_REGION: us-east-1
+      COGNITO_CUSTOMER_POOL_ID: us-east-1_ci
+      COGNITO_CUSTOMER_CLIENT_ID: ci
+      COGNITO_RESTAURANT_POOL_ID: us-east-1_ci
+      COGNITO_RESTAURANT_CLIENT_ID: ci
+      S3_BUCKET: ci
+      SQS_IMAGE_PROCESSING_URL: https://sqs.us-east-1.amazonaws.com/000000000000/ci-images
+      SQS_ORDER_EVENTS_URL: https://sqs.us-east-1.amazonaws.com/000000000000/ci-order-events
+      ABACATEPAY_API_KEY: ci
+      ABACATEPAY_WEBHOOK_SECRET: ci-webhook-secret-0123456789
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm typecheck
+
+      - name: Migrations match the schema
+        run: |
+          pnpm db:generate
+          git status --porcelain src/db/migrations
+          test -z "$(git status --porcelain src/db/migrations)"
+
+      - name: docs/api matches the routes
+        run: |
+          pnpm docs:openapi
+          git diff --exit-code docs/api
+
+      - run: pnpm test

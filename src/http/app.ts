@@ -71,7 +71,7 @@ export async function buildApp(env: Env, container: DependencyContainer): Promis
   })
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
-  await registerSwagger(app)
+  await registerSwagger(app, { ui: env.NODE_ENV !== 'production' })
   registerErrorHandler(app)
 
   registerAuth(app, container)

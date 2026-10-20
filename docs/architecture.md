@@ -20,7 +20,7 @@ MyFood uses three separate repositories (no monorepo). The contract between them
 - **The deployed database is Neon** (`us-east-1`, next to the `dev` stage; Postgres 16, the same
   major as Docker and CI), on the `main` branch of the `myfood-dev` project (D19). Local development
   stays on the Docker Postgres.
-- **AWS, pay-per-use only:** Cognito, S3, SQS, SES and Lambda, provisioned with Serverless Framework.
+- **AWS, pay-per-use only:** Cognito, S3, SQS, API Gateway and Lambda, provisioned with Serverless Framework.
 - **Real AWS in development.** These services are pay-per-use and effectively free at this volume, so local development runs against real resources instead of emulators (LocalStack, ElasticMQ, cognito-local). Emulators would only prove the code works against the emulator.
 - **Resources are per stage.** Every resource name carries `${sls:stage}`, so two developers never share a queue or a user pool.
 - **Deployment-agnostic code:**
@@ -78,7 +78,7 @@ Postgres is never faked: checkout numbering, delivery confirmation, idempotency 
 - **Password recovery is Cognito's, wrapped by our routes (D17).** `POST /auth/{customers,restaurant-users}/forgot-password` calls `ForgotPassword`, and `.../reset-password` calls `ConfirmForgotPassword` with the code and the new password. Cognito owns the code, its one-hour expiry and the attempt limits, so there is no table, no code generation and no hashing here — the same reasoning as D5: the client never talks to Cognito, but Cognito is still the one holding the secret.
 - **Neither recovery route reveals whether an e-mail has an account.** `forgotPassword` swallows `UserNotFoundException`, `resetPassword` answers the same message for a wrong code and an unknown user, and both routes return a fixed string. The rate limit is 5/minute, tighter than sign-in's 10, because the route sends mail to an address the caller chose.
 - **The recovery e-mail is ours, not Cognito's default.** A `CustomMessage` Lambda trigger (`src/lambda/cognito-custom-message.tsx`) renders the react-email template in `src/infra/emails/` and replaces the body. It is attached to both pools, and it is a legal Lambda under the runtime rules because it never touches Postgres. The rendered HTML must keep the literal `{####}` that Cognito substitutes at send time, and must stay under Cognito's 20,000-character limit for `emailMessage` (it currently renders ~3,500).
-- **Cognito sends through SES** (`EmailSendingAccount: DEVELOPER`), which needs `SES_FROM_ADDRESS` verified in the same region *before* the stack is deployed — the pool update fails otherwise. Only the deploy reads that variable; the API itself never sends e-mail and has no SES dependency.
+- **Cognito sends the e-mails itself** (`EmailSendingAccount: COGNITO_DEFAULT`, D20): AWS sender, at most 50 e-mails a day, to any address. The body is still ours, through the `CustomMessage` trigger. The API itself never sends e-mail.
 - **The access token is verified, not the ID token.** The ID token exists for the app to know who is signed in; the API needs only `sub`, and the local row already holds the name and e-mail. With `tokenUse: 'access'` the verifier checks `client_id`, so the pair (pool, client) still keeps the two audiences apart.
 
 ## 5. Restaurants
@@ -423,9 +423,11 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D14 | Image variants are served from a public `media/` prefix, not presigned GETs: a menu listing would need one signature per product, and an expiring URL cannot be cached by a CDN (§6.1). |
 | D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
 | D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
-| D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email, delivered by SES (§4). |
+| D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email (§4). |
 | D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a worker, and the outbox carries three aggregate events, not every transition (§11). |
 | D19 | The deployed database is Neon, in the same region as the Lambdas (`us-east-1`; moving both to `sa-east-1` is the fix if latency for Brazilian users proves to matter). There is one deployed stage, `dev`, and no production environment for now. The API connects through the pooled URL (PgBouncer, transaction mode, hence `prepare: false`); migrations use the direct URL (`DATABASE_URL_UNPOOLED`) and run from CI on `main`, before the deploy, so they must stay compatible with the code already running (§3). |
+| D20 | Cognito sends its own e-mails (`COGNITO_DEFAULT`) instead of SES. Sending through SES needs a verified domain and production access out of the SES sandbox, or only verified addresses receive the sign-up code; with no production environment, the 50 e-mails a day of the default sender are enough. Switching back is a change in `EmailConfiguration`, not in code. |
+| D21 | The API runs on Lambda behind an API Gateway HTTP API (`src/lambda/http.ts` with `@fastify/aws-lambda`), with one catch-all route. Secrets come from SSM Parameter Store, resolved at deploy time. Throttling is on the API Gateway stage: `@fastify/rate-limit` counts per instance and stays only as a second layer. |
 
 ## 14. Open questions
 

@@ -160,7 +160,7 @@ confirmation, Pix webhooks, analytics and the SSE stream — with Cognito, S3, A
 replaced by in-memory fakes.
 
 The [API reference](https://pedrohdionisio.github.io/myfood-api/api/) is generated from the route
-schemas and published to GitHub Pages; it is also served at `/docs` on a running API.
+schemas and published to GitHub Pages; it is also served at `/docs` on a local API.
 
 ## Running the full stack
 
@@ -172,7 +172,7 @@ pnpm install
 cp .env.example .env
 
 # Cognito pools, S3 bucket, SQS queues and Lambdas.
-# Set SES_FROM_ADDRESS to an address verified in SES first, then copy the stack outputs into .env.
+# Copy the stack outputs into .env afterwards.
 pnpm deploy
 
 docker compose up -d        # PostgreSQL, the API on :3333 and the three workers

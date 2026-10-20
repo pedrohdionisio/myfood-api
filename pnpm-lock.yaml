@@ -20,6 +20,9 @@ importers:
       '@aws-sdk/s3-presigned-post':
         specifier: ^3.1134.0
         version: 3.1134.0
+      '@fastify/aws-lambda':
+        specifier: 6.4.1
+        version: 6.4.1
       '@fastify/cors':
         specifier: 11.3.0
         version: 11.3.0
@@ -776,6 +779,9 @@ packages:
 
   '@fastify/ajv-compiler@4.0.6':
     resolution: {integrity: sha512-NtuzM0SfaMJbGlnjr9LWQUN5LzgSrbB8tf/wRZNas+4E1O/Nmzl53e7ruT61HDZyRCJGC6FxIogmNZO1c5ETBA==}
+
+  '@fastify/aws-lambda@6.4.1':
+    resolution: {integrity: sha512-eTCkZJ8b4NAyafxChyM1VSVMUK1KnlyXj7NBfrQm8dRcXj42X8je5poyaZDZ9T5XTyykl3oLMiI4IvZJWXzLsw==}
 
   '@fastify/cors@11.3.0':
     resolution: {integrity: sha512-ggQGua+xHv1MvePbPr0v//xLYEsCXbWspquXCJS9Ot5YoRXq8J8ZWzHnxDBVnbtXosvistXo6LtNzOJswf64Fw==}
@@ -3575,6 +3581,8 @@ snapshots:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       fast-uri: 4.1.5
+
+  '@fastify/aws-lambda@6.4.1': {}
 
   '@fastify/cors@11.3.0':
     dependencies:

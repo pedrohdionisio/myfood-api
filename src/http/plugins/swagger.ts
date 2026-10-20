@@ -171,7 +171,7 @@ const transform: typeof jsonSchemaTransform = (input) => {
   }
 }
 
-export async function registerSwagger(app: App): Promise<void> {
+export async function registerSwagger(app: App, options: { ui: boolean }): Promise<void> {
   await app.register(swagger, {
     openapi: {
       info: {
@@ -204,7 +204,11 @@ export async function registerSwagger(app: App): Promise<void> {
     transform
   })
 
-  await app.register(swaggerUi, {
-    routePrefix: '/docs'
-  })
+  // O swagger-ui serve arquivos estáticos lidos via __dirname, que não existem no bundle da
+  // Lambda. Fora do ambiente local a referência é a publicada no GitHub Pages (docs/api).
+  if (options.ui) {
+    await app.register(swaggerUi, {
+      routePrefix: '/docs'
+    })
+  }
 }

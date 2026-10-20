@@ -38,15 +38,19 @@ paths:
 - Long-running containers, one entry point each, built on `runtime.ts`:
   `createWorkerLogger(env, name)` (same `redact` as the API), `shutdownSignal(logger)` and
   `sleep(ms, signal)`. Loops check `signal.aborted` and close the database on the way out.
-- A worker may touch Postgres; a Lambda may not.
+- Workers still run only in Docker; moving them to Lambdas is the next step of the migration.
 
 ## Lambdas (`src/lambda/`)
 
-- **Only work that never touches Postgres may be a Lambda** while the database is local. Today:
-  image processing and the Cognito `CustomMessage` trigger.
-- A Lambda is a thin shell over a use case. It must not build the DI container or import
-  `config/env.ts` (both need `DATABASE_URL`); it validates its own env with Zod and builds its
-  adapters by hand.
+- The database is Neon (D19), so Lambdas may touch Postgres. `http.ts` is the API: it builds the
+  container and the app once per instance, at module load, and hands them to
+  `@fastify/aws-lambda`.
+- Lambdas that do not need the database (image processing, the Cognito `CustomMessage` trigger)
+  stay thin shells over a use case: no DI container, no `config/env.ts`; they validate their own
+  env with Zod and build their adapters by hand, so they boot without `DATABASE_URL`.
+- `sharp` is imported lazily inside `SharpImageProcessor`. Its JS is bundled, but its native
+  binary exists only in the image Lambda's layer and loads as soon as the module is evaluated;
+  a static import would break every other Lambda at startup.
 - SQS-triggered handlers return `batchItemFailures` so one bad message does not requeue the batch.
 - `sharp` comes from the layer built by `scripts/build-layers.sh`. Deploy with `pnpm deploy`.
 

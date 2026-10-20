@@ -51,7 +51,7 @@ The workflows are skills that orchestrate specialist subagents:
 - Node.js 24 + TypeScript (strict, legacy decorators) · Fastify + `fastify-type-provider-zod` ·
   `@fastify/swagger`
 - tsyringe · Drizzle ORM with `postgres.js` · PostgreSQL 16 (`pg_trgm`, `unaccent`)
-- AWS through Serverless Framework: Cognito, S3, SQS, SES and Lambda · AbacatePay (Pix) · Expo push
+- AWS through Serverless Framework: Cognito, S3, SQS, API Gateway and Lambda · AbacatePay (Pix) · Expo push
 - Pino · Vitest + Testcontainers · Biome · Docker Compose
 
 ## Runtime model

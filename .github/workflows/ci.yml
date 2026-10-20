@@ -56,17 +56,17 @@ jobs:
 
       - run: pnpm test
 
-  # Aplica as migrations no Neon de produção. Só roda na main, depois de tudo verde, e a URL
-  # direta fica no environment "production" do GitHub, fora do alcance de PRs.
+  # Aplica as migrations no Neon do stage dev. Só roda na main, depois de tudo verde, e a URL
+  # direta fica no environment "dev" do GitHub, fora do alcance de PRs.
   migrate:
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: production
+    environment: dev
 
     concurrency:
-      group: migrate-production
+      group: migrate-dev
       cancel-in-progress: false
 
     steps:

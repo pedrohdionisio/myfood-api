@@ -13,7 +13,9 @@ export function createDatabaseConnection(
   databaseUrl: string,
   options: { max?: number } = {}
 ): IDatabaseConnection {
-  const client = postgres(databaseUrl, { max: options.max ?? 10 })
+  // Em produção a URL é a pooled do Neon (PgBouncer em modo transação), que não aceita
+  // prepared statements nomeados: com prepare ligado, as queries falham ao trocar de conexão.
+  const client = postgres(databaseUrl, { max: options.max ?? 10, prepare: false })
 
   return {
     db: drizzle(client, { schema, casing: 'snake_case' }),

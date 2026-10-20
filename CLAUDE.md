@@ -56,7 +56,10 @@ The workflows are skills that orchestrate specialist subagents:
 
 ## Runtime model
 
-- The API and Postgres run locally in Docker. There is no deployed environment yet.
+- The API and Postgres run locally in Docker. Production's database is Neon (`sa-east-1`, D19);
+  the API itself is not deployed yet.
+- Migrations run in CI against production on every push to `main`, before the deploy: keep them
+  compatible with the code already running (expand, then contract).
 - Keep the API deployment-agnostic: `buildApp()` builds the Fastify instance and `server.ts` calls
   `listen`. Never put AWS runtime assumptions inside `buildApp()`.
 - The database is reached only through `DATABASE_URL`. No provider-specific drivers.

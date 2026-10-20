@@ -17,6 +17,8 @@ MyFood uses three separate repositories (no monorepo). The contract between them
 ## 3. Infrastructure
 
 - **Local-first:** the API and Postgres run in Docker. There is no deployed environment yet.
+- **Production database is Neon** (`sa-east-1`, Postgres 16, the same major as Docker and CI), on
+  the `production` branch of the `myfood` project (D19). Development stays on the Docker Postgres.
 - **AWS, pay-per-use only:** Cognito, S3, SQS, SES and Lambda, provisioned with Serverless Framework.
 - **Real AWS in development.** These services are pay-per-use and effectively free at this volume, so local development runs against real resources instead of emulators (LocalStack, ElasticMQ, cognito-local). Emulators would only prove the code works against the emulator.
 - **Resources are per stage.** Every resource name carries `${sls:stage}`, so two developers never share a queue or a user pool.
@@ -422,11 +424,12 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
 | D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email, delivered by SES (§4). |
 | D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a worker, and the outbox carries three aggregate events, not every transition (§11). |
+| D19 | Production runs on Neon in `sa-east-1`, next to the Lambdas, since the users are in Brazil. The API connects through the pooled URL (PgBouncer, transaction mode, hence `prepare: false`); migrations use the direct URL (`DATABASE_URL_UNPOOLED`) and run from CI on `main`, before the deploy, so they must stay compatible with the code already running (§3). |
 
 ## 14. Open questions
 
 - How the restaurant actually gets paid, given D15 leaves settlement outside the system
 - Disputes (`transparent.disputed`): the event exists and is not subscribed
-- Future deployment model for the API and database (e.g. Lambda + Neon)
+- Deployment model for the API and workers (Lambda), now that the database is on Neon (D19)
 - Review window: how long after delivery a customer may still review an order
 - When to reintroduce geolocation, and whether to do it with `geography` plus a generation workaround or with `geometry` and casts (§9)

@@ -28,6 +28,12 @@ paths:
 - **Never edit a migration that is already on `main`.** Fix forward with a new one.
 - CI runs `db:generate` and fails if it produces a file: a schema change always ships with its
   migration.
+- **Migrations must work with the code already deployed.** On `main` they run against production
+  before the new code ships, so for a while the old code runs on the new schema. Expand first
+  (add the nullable column, the new table), switch the code, and contract (drop, rename, `NOT
+  NULL`) in a later migration.
+- Migrations and `drizzle-kit` use `DATABASE_URL_UNPOOLED` when set (the direct Neon endpoint);
+  the API uses the pooled `DATABASE_URL`.
 
 ## Repositories (`src/infra/repositories/`)
 

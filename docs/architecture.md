@@ -16,22 +16,30 @@ MyFood uses three separate repositories (no monorepo). The contract between them
 
 ## 3. Infrastructure
 
-- **Local-first:** the API and Postgres run in Docker. There is no deployed environment yet.
-- **The deployed database is Neon** (`us-east-1`, next to the `dev` stage; Postgres 16, the same
-  major as Docker and CI), on the `main` branch of the `myfood-dev` project (D19). Local development
-  stays on the Docker Postgres.
+- **One deployed stage, `dev`, and no production environment.** The API and every background job
+  run as Lambdas (D21, D22); locally only the Fastify server runs (`pnpm dev`), against the same
+  stage.
+- **The database is Neon** (`us-east-1`, next to the Lambdas; Postgres 16, the same major as CI),
+  on the `main` branch of the `myfood-dev` project (D19). Local development uses it too, so the
+  server on your machine and the Lambdas see the same rows. Docker is only for the test suite.
 - **AWS, pay-per-use only:** Cognito, S3, SQS, API Gateway and Lambda, provisioned with Serverless Framework.
 - **Real AWS in development.** These services are pay-per-use and effectively free at this volume, so local development runs against real resources instead of emulators (LocalStack, ElasticMQ, cognito-local). Emulators would only prove the code works against the emulator.
 - **Resources are per stage.** Every resource name carries `${sls:stage}`, so two developers never share a queue or a user pool.
 - **Deployment-agnostic code:**
   - A shared `buildApp()` creates the Fastify instance.
-  - `server.ts` listens locally; a Lambda entry point can be added later with `@fastify/aws-lambda`.
-  - The database uses `postgres.js` through `DATABASE_URL`, so the same code works against local Postgres or a hosted serverless Postgres (e.g. Neon pooled connection) if the API is deployed later.
-- **Asynchronous work is split by what it touches.** Image processing is a Lambda (§6.1) because it
-  never reads the database. The order-events consumer and the outbox publisher stay as containers
-  under `src/workers/`: both need Postgres, and Postgres is still local-only. Moving them is a
-  decision about where the database lives, not about the code — the message handling already sits
-  in use cases, so an entry point under `src/lambda/` is all each would need.
+  - `server.ts` listens locally; `src/lambda/http.ts` hands the same app to `@fastify/aws-lambda`.
+  - The database uses `postgres.js` through `DATABASE_URL`, so the same code works against the test container and Neon's pooled connection.
+- **Background work is event-driven, with an hourly safety net (D22).** Neon only suspends its
+  compute after 5 idle minutes, so anything that queries the database every minute keeps it on all
+  month, above the free plan's compute quota. No job polls:
+  - `relayOutbox` publishes `outbox_events` to SQS. The API wakes it with an asynchronous invoke
+    right after the commit, from `NotifyOrderChangeUseCase` — every outbox write ends in an order
+    change that passes through it.
+  - `orderEvents` consumes that queue through an event source mapping (§10).
+  - `settleCharges` runs at each Pix charge's expiry, through a one-time EventBridge Scheduler
+    schedule created with the charge (§12.4).
+  - The relay and the settlement also run every hour, which catches a lost wake-up, a schedule that
+    failed to be created, and pending refunds.
 
 ### 3.1 Layers
 
@@ -60,6 +68,9 @@ Every external service sits behind a port. The real adapter runs in development 
 | `IImageProcessor` | Sharp | Identity buffer |
 | `IPaymentGateway` | AbacatePay | In-memory charges with settable status |
 | `IPushGateway` | Expo | Records what was sent |
+| `IEventPublisher` | SQS | Records what was published, can fail chosen events |
+| `IOutboxRelayTrigger` | Asynchronous Lambda invoke | Counts the wake-ups |
+| `IChargeExpiryScheduler` | EventBridge Scheduler, one-time schedule | Records what was scheduled |
 
 The real adapters are built by `buildAdapters(env)`; `buildContainer(env, adapters)` takes them as a parameter, which is how the tests swap them. Tests use fakes for determinism, not for cost: a suite that polls a shared SQS queue is slow and flaky, and CI would need AWS credentials committed somewhere. SQS itself is never reached by the suite — the feature tests read `outbox_events` and call `ProcessOrderEventUseCase` directly, which is where idempotency (rule 6) lives.
 
@@ -128,12 +139,11 @@ queue, and a Lambda (`src/lambda/process-image.ts`) consumes it through an event
 The prefix filter is what keeps it from re-queueing itself: it reads `originals/` and writes
 `media/`.
 
-**Why this one is a Lambda and the other consumers are not.** It is the only asynchronous path that
-never touches the database, so it is the only one that can run in AWS while Postgres is still a
-local container. `sharp` ships native binaries, which is why the function carries a layer built by
-`scripts/build-layers.sh` (linux/arm64/glibc) instead of bundling the package. The order-events and
-outbox consumers stay as containers under `src/workers/` until there is a Postgres that AWS can
-reach.
+**Why it boots without the database.** It is the only asynchronous path that never touches
+Postgres, so it skips the DI container and validates its own env. `sharp` ships native binaries,
+which is why the function carries a layer built by `scripts/build-layers.sh` (linux/arm64/glibc):
+the bundler packs sharp's JavaScript, but the binary it loads comes from the layer. Every other
+module imports `sharp` lazily, or the Lambdas without the layer would fail at startup.
 
 **Failures are per message, not per batch.** The event source mapping is declared with
 `functionResponseType: ReportBatchItemFailures`, and the handler returns the ids it could not
@@ -276,7 +286,8 @@ Dashboard analytics read from aggregate tables, never from on-the-fly scans of `
 - `product_daily_sales`: quantity and revenue per product per day.
 
 **How the tables are updated:**
-- Order events are published to SQS, and consumers update the aggregates.
+- Order events are written to `outbox_events` in the order's transaction, published to SQS by the
+  `relayOutbox` Lambda, and applied by the `orderEvents` Lambda (§3).
 - SQS delivers messages at least once, so consumers record `message_id` in `processed_messages` to avoid double counting.
 
 **Data rules:**
@@ -300,7 +311,7 @@ and in-process WebSockets do not survive a move to Lambda.
 - An order in `PENDING_PAYMENT` is published to nobody: it does not exist for the restaurant (§12),
   and the stream is the one place where that could have leaked before the listing filters ran.
 - **The stream lives in the memory of the API process.** It reaches the SSE connections open on that
-  instance and no others. Inside a worker it exists with no listeners, so an order confirmed by the
+  instance and no others. Inside a background Lambda it exists with no listeners, so an order confirmed by the
   payments reconciliation (§12.4) reaches the dashboard on its next refetch, not through the stream.
   A second API instance would need Postgres `LISTEN/NOTIFY` or Redis in place of the in-memory map;
   the port (`IOrderStream`) is what that swap would touch.
@@ -354,8 +365,8 @@ released", not the ledger.
 | `POST /orders/:id/payment` | Charge created at the gateway, stored in `payments`, `brCode` returned |
 | `transparent.completed` webhook | Charge `PAID`, order `PENDING_PAYMENT` → `PENDING`, `ORDER_CREATED` enqueued |
 | nobody pays | Worker expires the charge and cancels the order (`payment_status = FAILED`) |
-| paid order canceled or rejected | Charge goes to `REFUND_PENDING`; the worker refunds it |
-| paid after the worker expired it | Order stays canceled; the charge goes to `REFUND_PENDING` and is refunded |
+| paid order canceled or rejected | Charge goes to `REFUND_PENDING`; the settlement refunds it |
+| paid after the settlement expired it | Order stays canceled; the charge goes to `REFUND_PENDING` and is refunded |
 
 **Checkout does not call the gateway.** An outbound HTTP call glued to the checkout transaction
 would put the commit at the mercy of the network, and a second route is needed regardless — the QR
@@ -392,12 +403,14 @@ mode, not a guarantee.
 
 ### 12.4 Reconciliation (D16)
 
-AbacatePay emits no "expired" event, so expiry is ours to detect: the `payments` worker sweeps
-every 60s. **Before canceling, it asks the gateway for the real status.** If the money arrived and
+AbacatePay emits no "expired" event, so expiry is ours to detect. Creating a charge also creates a
+one-time EventBridge Scheduler schedule for a minute after it expires, which runs the
+`settleCharges` Lambda and then deletes itself; the same Lambda sweeps every hour for anything a
+schedule missed. **Before canceling, it asks the gateway for the real status.** If the money arrived and
 the webhook was lost, the order is confirmed instead of killed. That check is what keeps a missed
 webhook from being a lost order — the webhook is the fast path, not the only path.
 
-The same worker drains `REFUND_PENDING`. The refund is queued inside the cancellation transaction
+The hourly sweep drains `REFUND_PENDING`, so a refund can take up to an hour to start. The refund is queued inside the cancellation transaction
 rather than called from it, for the same reason checkout does not call the gateway. AbacatePay's
 refund endpoint is idempotent per charge id, so a retry cannot double-refund.
 
@@ -422,17 +435,17 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D13 | No geolocation in the MVP. Delivery is city-based with a flat fee per restaurant (§9). |
 | D14 | Image variants are served from a public `media/` prefix, not presigned GETs: a menu listing would need one signature per product, and an expiring URL cannot be cached by a CDN (§6.1). |
 | D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
-| D16 | The gateway sends no expiry event, so a worker sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
+| D16 | The gateway sends no expiry event, so the settlement sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
 | D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email (§4). |
-| D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a worker, and the outbox carries three aggregate events, not every transition (§11). |
+| D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a background job, and the outbox carries three aggregate events, not every transition (§11). |
 | D19 | The deployed database is Neon, in the same region as the Lambdas (`us-east-1`; moving both to `sa-east-1` is the fix if latency for Brazilian users proves to matter). There is one deployed stage, `dev`, and no production environment for now. The API connects through the pooled URL (PgBouncer, transaction mode, hence `prepare: false`); migrations use the direct URL (`DATABASE_URL_UNPOOLED`) and run from CI on `main`, before the deploy, so they must stay compatible with the code already running (§3). |
 | D20 | Cognito sends its own e-mails (`COGNITO_DEFAULT`) instead of SES. Sending through SES needs a verified domain and production access out of the SES sandbox, or only verified addresses receive the sign-up code; with no production environment, the 50 e-mails a day of the default sender are enough. Switching back is a change in `EmailConfiguration`, not in code. |
 | D21 | The API runs on Lambda behind an API Gateway HTTP API (`src/lambda/http.ts` with `@fastify/aws-lambda`), with one catch-all route. Secrets come from SSM Parameter Store, resolved at deploy time. Throttling is on the API Gateway stage: `@fastify/rate-limit` counts per instance and stays only as a second layer. |
+| D22 | Background jobs are Lambdas triggered by events, with an hourly sweep as the safety net, never by short-interval cron: a query every minute would keep Neon's compute from scaling to zero and exceed the free compute quota. The outbox relay is woken by an asynchronous invoke after the commit, the order-events consumer is an SQS event source mapping, and each Pix charge gets a one-time EventBridge Scheduler schedule at its expiry. Local development uses the same Neon database and AWS stage, so the server on the developer's machine and the Lambdas never disagree about which rows exist. |
 
 ## 14. Open questions
 
 - How the restaurant actually gets paid, given D15 leaves settlement outside the system
 - Disputes (`transparent.disputed`): the event exists and is not subscribed
-- Deployment model for the API and workers (Lambda), now that the database is on Neon (D19)
 - Review window: how long after delivery a customer may still review an order
 - When to reintroduce geolocation, and whether to do it with `geography` plus a generation workaround or with `geometry` and casts (§9)

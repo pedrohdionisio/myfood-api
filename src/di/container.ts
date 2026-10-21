@@ -1,13 +1,17 @@
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
+import type { IChargeExpiryScheduler } from '@/application/interfaces/IChargeExpiryScheduler.js'
+import type { IEventPublisher } from '@/application/interfaces/IEventPublisher.js'
 import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
 import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
+import type { IOutboxRelayTrigger } from '@/application/interfaces/IOutboxRelayTrigger.js'
 import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
 import type { IPushGateway } from '@/application/interfaces/IPushGateway.js'
 import type { IStorageGateway } from '@/application/interfaces/IStorageGateway.js'
 import type { ITokenVerifier } from '@/application/interfaces/ITokenVerifier.js'
 import { GetAnalyticsUseCase } from '@/application/useCases/analytics/GetAnalyticsUseCase.js'
 import { ProcessOrderEventUseCase } from '@/application/useCases/analytics/ProcessOrderEventUseCase.js'
+import { RelayOutboxUseCase } from '@/application/useCases/analytics/RelayOutboxUseCase.js'
 import { ForgotPasswordUseCase } from '@/application/useCases/auth/ForgotPasswordUseCase.js'
 import { RefreshSessionUseCase } from '@/application/useCases/auth/RefreshSessionUseCase.js'
 import { ResetPasswordUseCase } from '@/application/useCases/auth/ResetPasswordUseCase.js'
@@ -84,6 +88,9 @@ import { CognitoTokenVerifier } from '@/infra/gateways/CognitoTokenVerifier.js'
 import { ExpoPushGateway } from '@/infra/gateways/ExpoPushGateway.js'
 import { S3StorageGateway } from '@/infra/gateways/S3StorageGateway.js'
 import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
+import { EventBridgeChargeExpiryScheduler } from '@/infra/queues/EventBridgeChargeExpiryScheduler.js'
+import { LambdaOutboxRelayTrigger } from '@/infra/queues/LambdaOutboxRelayTrigger.js'
+import { SqsEventPublisher } from '@/infra/queues/SqsEventPublisher.js'
 import { DrizzleAnalyticsRepository } from '@/infra/repositories/DrizzleAnalyticsRepository.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomerAddressesRepository } from '@/infra/repositories/DrizzleCustomerAddressesRepository.js'
@@ -181,6 +188,7 @@ const SINGLETONS: [symbol, new (...args: never[]) => unknown][] = [
   [TOKENS.OutboxRepository, DrizzleOutboxRepository],
   [TOKENS.AnalyticsRepository, DrizzleAnalyticsRepository],
   [TOKENS.ProcessOrderEventUseCase, ProcessOrderEventUseCase],
+  [TOKENS.RelayOutboxUseCase, RelayOutboxUseCase],
   [TOKENS.GetAnalyticsUseCase, GetAnalyticsUseCase],
   [TOKENS.CreateImageUploadUseCase, CreateImageUploadUseCase],
   [TOKENS.ProcessImageVariantsUseCase, ProcessImageVariantsUseCase]
@@ -195,6 +203,9 @@ export interface IAdapters {
   imageProcessor: IImageProcessor
   paymentGateway: IPaymentGateway
   pushGateway: IPushGateway
+  eventPublisher: IEventPublisher
+  outboxRelayTrigger: IOutboxRelayTrigger
+  chargeExpiryScheduler: IChargeExpiryScheduler
 }
 
 export function buildAdapters(env: Env): IAdapters {
@@ -226,7 +237,19 @@ export function buildAdapters(env: Env): IAdapters {
     storageGateway: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION, credentials),
     imageProcessor: new SharpImageProcessor(),
     paymentGateway: new AbacatePayPaymentGateway(env.ABACATEPAY_API_URL, env.ABACATEPAY_API_KEY),
-    pushGateway: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN)
+    pushGateway: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN),
+    eventPublisher: new SqsEventPublisher(env.SQS_ORDER_EVENTS_URL, env.AWS_REGION, credentials),
+    outboxRelayTrigger: new LambdaOutboxRelayTrigger(
+      env.OUTBOX_RELAY_FUNCTION_NAME,
+      env.AWS_REGION,
+      credentials
+    ),
+    chargeExpiryScheduler: new EventBridgeChargeExpiryScheduler(
+      env.SETTLE_CHARGES_FUNCTION_ARN,
+      env.CHARGE_EXPIRY_SCHEDULER_ROLE_ARN,
+      env.AWS_REGION,
+      credentials
+    )
   }
 }
 
@@ -255,6 +278,13 @@ export function buildContainer(
   container.register<IImageProcessor>(TOKENS.ImageProcessor, { useValue: adapters.imageProcessor })
   container.register<IPaymentGateway>(TOKENS.PaymentGateway, { useValue: adapters.paymentGateway })
   container.register<IPushGateway>(TOKENS.PushGateway, { useValue: adapters.pushGateway })
+  container.register<IEventPublisher>(TOKENS.EventPublisher, { useValue: adapters.eventPublisher })
+  container.register<IOutboxRelayTrigger>(TOKENS.OutboxRelayTrigger, {
+    useValue: adapters.outboxRelayTrigger
+  })
+  container.register<IChargeExpiryScheduler>(TOKENS.ChargeExpiryScheduler, {
+    useValue: adapters.chargeExpiryScheduler
+  })
 
   container.register<string>(TOKENS.MediaBaseUrl, { useValue: env.MEDIA_BASE_URL })
 
@@ -267,7 +297,8 @@ export function buildContainer(
   })
 
   // O stream vive na memória do processo: só entrega aos SSE abertos nesta instância da API.
-  // Num worker ele existe e não tem ouvintes — o dashboard vê aquela mudança no próximo refetch.
+  // Numa Lambda de background ele existe e não tem ouvintes — o dashboard vê aquela mudança no
+  // próximo refetch.
   container.register<IOrderStream>(TOKENS.OrderStream, { useValue: new InMemoryOrderStream() })
 
   container.register(TOKENS.RefreshCustomerSessionUseCase, {

@@ -1,6 +1,7 @@
 import { inject, injectable } from 'tsyringe'
 import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
 import type { IOrderNotificationTarget } from '@/application/interfaces/IOrdersRepository.js'
+import type { IOutboxRelayTrigger } from '@/application/interfaces/IOutboxRelayTrigger.js'
 import type { IPushGateway } from '@/application/interfaces/IPushGateway.js'
 import type { IPushTokensRepository } from '@/application/interfaces/IPushTokensRepository.js'
 import { TOKENS } from '@/di/tokens.js'
@@ -27,11 +28,17 @@ export class NotifyOrderChangeUseCase {
     @inject(TOKENS.PushTokensRepository)
     private readonly pushTokens: IPushTokensRepository,
     @inject(TOKENS.PushGateway)
-    private readonly push: IPushGateway
+    private readonly push: IPushGateway,
+    @inject(TOKENS.OutboxRelayTrigger)
+    private readonly outboxRelay: IOutboxRelayTrigger
   ) {}
 
   async execute(input: INotifyOrderChangeInput): Promise<void> {
     const { change, actor, order } = input
+
+    // Toda escrita no outbox termina numa mudança de pedido que passa por aqui depois do commit,
+    // então este é o único ponto que precisa acordar o relay.
+    await this.outboxRelay.wake()
 
     if (isVisibleToRestaurant(order.status)) {
       this.stream.publish(order.restaurantId, {

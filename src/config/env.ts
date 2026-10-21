@@ -21,6 +21,12 @@ const envSchema = z.object({
   SQS_IMAGE_PROCESSING_URL: z.url(),
   SQS_ORDER_EVENTS_URL: z.url(),
 
+  // Lambdas do stage: a API acorda o relay do outbox depois do commit e agenda, no EventBridge
+  // Scheduler, o acerto de cada cobrança Pix para quando ela vencer.
+  OUTBOX_RELAY_FUNCTION_NAME: z.string().min(1),
+  SETTLE_CHARGES_FUNCTION_ARN: z.string().startsWith('arn:aws:lambda:'),
+  CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: z.string().startsWith('arn:aws:iam::'),
+
   // A troca por um domínio de CDN é aqui: o resto do código só conhece esta base.
   MEDIA_BASE_URL: z.url().optional(),
 

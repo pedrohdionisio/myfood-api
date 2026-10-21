@@ -24,6 +24,9 @@ jobs:
       S3_BUCKET: ci
       SQS_IMAGE_PROCESSING_URL: https://sqs.us-east-1.amazonaws.com/000000000000/ci-images
       SQS_ORDER_EVENTS_URL: https://sqs.us-east-1.amazonaws.com/000000000000/ci-order-events
+      OUTBOX_RELAY_FUNCTION_NAME: ci-relay-outbox
+      SETTLE_CHARGES_FUNCTION_ARN: arn:aws:lambda:us-east-1:000000000000:function:ci-settle-charges
+      CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: arn:aws:iam::000000000000:role/ci-scheduler
       ABACATEPAY_API_KEY: ci
       ABACATEPAY_WEBHOOK_SECRET: ci-webhook-secret-0123456789
 

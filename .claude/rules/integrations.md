@@ -3,7 +3,6 @@ paths:
   - "src/infra/gateways/**"
   - "src/infra/queues/**"
   - "src/infra/streams/**"
-  - "src/workers/**"
   - "src/lambda/**"
   - "src/config/**"
   - "serverless.yml"
@@ -29,16 +28,10 @@ paths:
 ## Queues and outbox
 
 - Events leave through the outbox: a row in `outbox_events` written in the business transaction,
-  published by `workers/outbox-publisher.ts`. Never publish to SQS from a request.
+  published by the `relayOutbox` Lambda (`RelayOutboxUseCase`). Never publish to SQS from a
+  request: the request only wakes the relay, through `IOutboxRelayTrigger`, after the commit.
 - Consumers are idempotent by message id (`processed_messages`), because SQS delivers at least once
   and the publisher retries.
-
-## Workers (`src/workers/`)
-
-- Long-running containers, one entry point each, built on `runtime.ts`:
-  `createWorkerLogger(env, name)` (same `redact` as the API), `shutdownSignal(logger)` and
-  `sleep(ms, signal)`. Loops check `signal.aborted` and close the database on the way out.
-- Workers still run only in Docker; moving them to Lambdas is the next step of the migration.
 
 ## Lambdas (`src/lambda/`)
 
@@ -52,7 +45,13 @@ paths:
   binary exists only in the image Lambda's layer and loads as soon as the module is evaluated;
   a static import would break every other Lambda at startup.
 - SQS-triggered handlers return `batchItemFailures` so one bad message does not requeue the batch.
-- `sharp` comes from the layer built by `scripts/build-layers.sh`. Deploy with `pnpm deploy`.
+- **No job polls the database on a short interval** (D22). Neon suspends its compute only after 5
+  idle minutes, and a per-minute cron would keep it on all month. Background work is triggered by
+  an event (an SQS message, an asynchronous invoke after a commit, a one-time EventBridge Scheduler
+  schedule) and backed by an hourly sweep. A new job follows the same shape.
+- Triggers fired from a request (`IOutboxRelayTrigger`, `IChargeExpiryScheduler`) never reject:
+  the state is already committed, and the hourly sweep covers a trigger that failed.
+- `sharp` comes from the layer built by `scripts/build-layers.sh`. Deploy with `pnpm run deploy`.
 
 ## Serverless
 

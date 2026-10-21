@@ -52,12 +52,16 @@ The workflows are skills that orchestrate specialist subagents:
   `@fastify/swagger`
 - tsyringe · Drizzle ORM with `postgres.js` · PostgreSQL 16 (`pg_trgm`, `unaccent`)
 - AWS through Serverless Framework: Cognito, S3, SQS, API Gateway and Lambda · AbacatePay (Pix) · Expo push
-- Pino · Vitest + Testcontainers · Biome · Docker Compose
+- Pino · Vitest + Testcontainers · Biome
 
 ## Runtime model
 
-- The API and Postgres run locally in Docker. The deployed `dev` stage uses Neon (`us-east-1`,
-  D19); the API itself is not deployed yet. There is no production environment.
+- One deployed stage, `dev` (`us-east-1`), and no production environment. The API and the
+  background jobs are Lambdas (D21, D22); the database is Neon (D19).
+- Locally only the Fastify server runs (`pnpm dev`), against the same Neon database and AWS
+  resources as the Lambdas. Docker is only for the test suite (Testcontainers).
+- No job polls the database on a short interval: background work is triggered by events, with an
+  hourly sweep as the safety net (D22).
 - Migrations run in CI against the Neon database on every push to `main`, before the deploy: keep them
   compatible with the code already running (expand, then contract).
 - Keep the API deployment-agnostic: `buildApp()` builds the Fastify instance and `server.ts` calls
@@ -82,8 +86,8 @@ src/
   schemas/       Zod schemas — the HTTP contract, never reused as domain types
   config/        env, logger and AWS credentials
   db/            client.ts, schema/, migrations/
-  workers/       outbox publisher, order events consumer, payments sweeper
-  lambda/        image processing, Cognito e-mail trigger
+  lambda/        entry points: http (the API), relay-outbox, order-events, settle-charges,
+                 process-image, cognito-custom-message
 ```
 
 ## Conventions
@@ -123,13 +127,13 @@ src/
 
 ## Local environment
 
-- The user's API container owns port **3333**. To run an API of your own, publish another port
-  (`docker compose run --rm -p 3334:3333 api`) and stop it when done.
-- After adding a dependency, the container keeps its old `node_modules` volume: rebuild with
-  `docker compose build --no-cache api`.
-- In `.env`, a value starting with `$` must be quoted, or Docker Compose interpolates it to empty.
+- The user's local API owns port **3333**. To run one of your own, use `PORT=3334 pnpm dev` and
+  stop it when done.
+- The local API writes to the shared Neon database and wakes the deployed Lambdas: anything it
+  creates is real data in the `dev` stage.
 - Authenticated routes take the Cognito **access** token (`session.accessToken`), not the ID token.
-- Deploy with `pnpm deploy`, never `sls deploy` alone: it rebuilds the `sharp` Lambda layer first.
+- Deploy with `pnpm run deploy`, never `sls deploy` alone: it rebuilds the `sharp` Lambda layer
+  first. (`pnpm deploy` without `run` is a different, built-in pnpm command.)
 
 ## Out of scope for now
 

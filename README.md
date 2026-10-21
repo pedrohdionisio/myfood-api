@@ -11,7 +11,7 @@ customer holds.
 
 | Repository | What it is |
 |---|---|
-| **myfood-api** (this one) | Fastify REST API, background workers and AWS Lambdas |
+| **myfood-api** (this one) | Fastify REST API and background jobs, all on AWS Lambda |
 | [myfood-dashboard](https://github.com/pedrohdionisio/myfood-dashboard) | React dashboard for restaurant owners |
 | [myfood-app](https://github.com/pedrohdionisio/myfood-app) | React Native (Expo) app for customers and drivers |
 
@@ -38,8 +38,8 @@ schema and error, generated from the code.
   are recalculated from the database, and an `Idempotency-Key` makes a double tap place one order.
 - **A delivery code that cannot leak.** Only the customer's own order routes declare it; tests walk
   the OpenAPI spec and every restaurant and driver payload looking for it.
-- **Pix payments** (AbacatePay) with webhooks verified twice, deduplicated, and reconciled by a
-  worker when a webhook is lost.
+- **Pix payments** (AbacatePay) with webhooks verified twice, deduplicated, and reconciled at each
+  charge's expiry when a webhook is lost.
 - **Transactional outbox → SQS → idempotent consumers** keep the analytics aggregates exact.
 - **Real time** for restaurants over SSE, push notifications for customers and drivers over Expo.
 - **Images** go straight to S3 with a presigned POST; a Lambda produces three WebP variants.
@@ -81,18 +81,20 @@ flowchart LR
 
     subgraph payments["Payments"]
         direction LR
-        sweeper["payments worker<br/>every 60s"] -->|"expire, reconcile, refund"| abacate["AbacatePay"]
+        scheduler["EventBridge Scheduler<br/>at each charge's expiry"] --> settle["settleCharges Lambda"] -->|"expire, reconcile, refund"| abacate["AbacatePay"]
     end
 
     subgraph events["Order events"]
         direction LR
-        pg1[("PostgreSQL<br/>outbox_events")] --> outbox["outbox publisher"] --> sqs1["SQS"] --> consumer["order events consumer"] --> pg2[("PostgreSQL<br/>daily aggregates")]
+        pg1[("PostgreSQL<br/>outbox_events")] --> outbox["relayOutbox Lambda<br/>woken after the commit"] --> sqs1["SQS"] --> consumer["orderEvents Lambda"] --> pg2[("PostgreSQL<br/>daily aggregates")]
     end
 ```
 
-The outbox publisher, the order events consumer and the payments worker run as containers next to
-the API, because they need Postgres, which is still a local container. Image processing never
-touches the database, so it is the one piece that runs as a Lambda.
+Everything runs on AWS Lambda against a serverless PostgreSQL (Neon), and nothing polls the
+database: the API wakes the outbox relay right after each commit, SQS triggers the consumer, and
+each Pix charge schedules its own settlement for when it expires. The relay and the settlement
+also run every hour, to catch a wake-up that was lost. Polling every minute would keep the database
+compute on all month; this way it can scale to zero.
 
 ## Order lifecycle
 
@@ -127,8 +129,8 @@ stateDiagram-v2
 ```
 
 An order waiting for its Pix does not exist for the restaurant: it appears on the dashboard only
-when the payment confirms. A paid order that is rejected or canceled is refunded by the payments
-worker.
+when the payment confirms. A paid order that is rejected or canceled is refunded by the hourly
+settlement.
 
 ## Engineering decisions
 
@@ -139,7 +141,7 @@ The full reasoning, with the alternatives considered, is in
 |---|---|
 | **Transactional outbox** instead of publishing to SQS from the request | The event row commits with the order, so an event is never lost and never sent for a rolled-back change. Consumers deduplicate by message id, so at-least-once delivery cannot double-count revenue. |
 | **SSE** for the restaurant dashboard, not WebSocket | The dashboard only listens. SSE is plain HTTP, reconnects on its own, and the event is a narrow DTO — the dashboard refetches the order, so nothing sensitive travels on the stream. |
-| **Pix reconciliation** instead of trusting the webhook | The webhook is the fast path. A worker asks the gateway for the real status before canceling an expired charge, and refunds a payment that arrives after the order was canceled. |
+| **Pix reconciliation** instead of trusting the webhook | The webhook is the fast path. At each charge's expiry, a Lambda asks the gateway for the real status before canceling an expired charge, and refunds a payment that arrives after the order was canceled. |
 | **Delivery code enforced by structure and by SQL** | Fastify serializes only declared fields, and only the customer's routes declare the code. Confirmation is one conditional `UPDATE`, with the attempt limit counted in the same locked transaction, so parallel guesses cannot get past it. |
 | **Membership checked in the database on every request** | Roles live in `restaurant_members`, not in token claims, so deactivating a driver takes effect on their next request, not when the token expires. |
 | **City-based delivery, no geolocation** in the MVP | Discovery and the delivery fee work by city with a flat fee. Coordinates, radius and distance-based fees are a deliberate follow-up, with the cost of adding them written down. |
@@ -164,28 +166,26 @@ schemas and published to GitHub Pages; it is also served at `/docs` on a local A
 
 ## Running the full stack
 
-The API is not deployed; it runs locally with Docker, against real pay-per-use AWS resources
-provisioned with the Serverless Framework.
+The whole backend is serverless: the API and the background jobs are Lambdas behind an API Gateway
+HTTP API, provisioned with the Serverless Framework, and the database is Neon. There is one stage,
+`dev`. Locally only the API server runs, against that same database and those same AWS resources.
 
 ```bash
 pnpm install
-cp .env.example .env
+cp .env.example .env        # the Neon URLs; the rest comes from the stack outputs
 
-# Cognito pools, S3 bucket, SQS queues and Lambdas.
-# Copy the stack outputs into .env afterwards.
-pnpm deploy
-
-docker compose up -d        # PostgreSQL, the API on :3333 and the three workers
+# The database URL and the AbacatePay secrets live in SSM Parameter Store under /myfood/dev/.
+pnpm run deploy             # Cognito, S3, SQS, the API Gateway and every Lambda
 pnpm db:migrate
 pnpm db:seed                # optional: restaurants, customers and order history
+pnpm dev                    # the API on :3333, with reload
 ```
 
-Always deploy with `pnpm deploy`: it rebuilds the Lambda layer for `sharp` first.
+Always deploy with `pnpm run deploy`: it rebuilds the Lambda layer for `sharp` first.
 
 | Script | What it does |
 |---|---|
-| `pnpm dev` | API with reload, outside Docker |
-| `pnpm worker:outbox` · `worker:orders` · `worker:payments` | The workers, outside Docker |
+| `pnpm dev` | API with reload |
 | `pnpm db:generate` · `db:migrate` | Create and apply migrations |
 | `pnpm docs:openapi` | Regenerate `docs/api/` from the routes |
 | `pnpm lint` · `pnpm typecheck` | Biome and `tsc` |
@@ -218,8 +218,8 @@ src/
   config/         environment, logger and AWS credentials
   db/             Drizzle schema and migrations
   di/             composition root
-  workers/        outbox publisher, order events consumer, payments sweeper
-  lambda/         image processing and the Cognito e-mail trigger
+  lambda/         entry points: the API, the outbox relay, the order events consumer,
+                  the charge settlement, image processing and the Cognito e-mail trigger
 tests/
   unit/  feature/  support/
 docs/
@@ -235,8 +235,9 @@ commits are in English.
 ## Stack
 
 Node.js 24 · TypeScript · Fastify · Zod · tsyringe · Drizzle ORM · PostgreSQL 16 (`pg_trgm`,
-`unaccent`) · AWS Cognito, S3, SQS, SES and Lambda · Serverless Framework · AbacatePay · Expo Push
-· Pino · Vitest · Testcontainers · Biome · Docker · GitHub Actions
+`unaccent`) on Neon · AWS Lambda, API Gateway, Cognito, S3, SQS and EventBridge Scheduler ·
+Serverless Framework · AbacatePay · Expo Push
+· Pino · Vitest · Testcontainers · Biome · GitHub Actions
 
 ## Author
 

@@ -83,6 +83,19 @@ describe('Pix payment', () => {
     expect(t.fakes.paymentGateway.charges.size).toBe(1)
   })
 
+  it('should schedule the settlement for when the charge expires, once', async () => {
+    const order = await placeOrder(t, s, { paymentMethod: 'ONLINE' })
+
+    const first = await t.request('POST', `/orders/${order.id}/payment`, {
+      token: s.customer.token
+    })
+    await t.request('POST', `/orders/${order.id}/payment`, { token: s.customer.token })
+
+    expect(t.fakes.chargeExpiryScheduler.scheduled).toEqual([
+      { chargeId: first.json().id, expiresAt: first.json().expiresAt }
+    ])
+  })
+
   it('should refuse a charge for an offline order or for another customer', async () => {
     const cash = await placeOrder(t, s)
     const online = await placeOrder(t, s, { paymentMethod: 'ONLINE' })

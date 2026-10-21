@@ -17,6 +17,10 @@ export function buildTestEnv(databaseUrl: string): Env {
     S3_BUCKET: 'myfood-test',
     SQS_IMAGE_PROCESSING_URL: 'https://sqs.us-east-1.amazonaws.com/000000000000/images',
     SQS_ORDER_EVENTS_URL: 'https://sqs.us-east-1.amazonaws.com/000000000000/order-events',
+    OUTBOX_RELAY_FUNCTION_NAME: 'myfood-api-test-relayOutbox',
+    SETTLE_CHARGES_FUNCTION_ARN:
+      'arn:aws:lambda:us-east-1:000000000000:function:myfood-api-test-settleCharges',
+    CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: 'arn:aws:iam::000000000000:role/myfood-test-scheduler',
     MEDIA_BASE_URL: 'https://media.test',
     ABACATEPAY_API_URL: 'https://abacatepay.test',
     ABACATEPAY_API_KEY: 'test-key',

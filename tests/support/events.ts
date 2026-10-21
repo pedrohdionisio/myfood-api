@@ -8,7 +8,7 @@ export function processOrderEvent(t: ITestContext) {
   return t.container.resolve<ProcessOrderEventUseCase>(TOKENS.ProcessOrderEventUseCase)
 }
 
-// Faz o papel do outbox-publisher e do consumidor da fila juntos, sem SQS no meio.
+// Faz o papel do relay do outbox e do consumidor da fila juntos, sem SQS no meio.
 export async function drainOutbox(t: ITestContext) {
   const pending = await t.db
     .select({ id: outboxEvents.id, type: outboxEvents.type, orderId: outboxEvents.orderId })

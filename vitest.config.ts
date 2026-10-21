@@ -11,7 +11,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/db/migrations/**', 'src/server.ts', 'src/workers/**']
+      exclude: ['src/db/migrations/**', 'src/server.ts']
     },
     projects: [
       {

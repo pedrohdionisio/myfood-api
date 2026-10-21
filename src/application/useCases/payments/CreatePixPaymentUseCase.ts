@@ -1,4 +1,5 @@
 import { inject, injectable } from 'tsyringe'
+import type { IChargeExpiryScheduler } from '@/application/interfaces/IChargeExpiryScheduler.js'
 import type { IOrdersRepository } from '@/application/interfaces/IOrdersRepository.js'
 import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
 import type { IPayment, IPaymentsRepository } from '@/application/interfaces/IPaymentsRepository.js'
@@ -15,7 +16,9 @@ export class CreatePixPaymentUseCase {
     @inject(TOKENS.PaymentGateway)
     private readonly gateway: IPaymentGateway,
     @inject(TOKENS.PixExpiresInSeconds)
-    private readonly expiresInSeconds: number
+    private readonly expiresInSeconds: number,
+    @inject(TOKENS.ChargeExpiryScheduler)
+    private readonly expiryScheduler: IChargeExpiryScheduler
   ) {}
 
   async execute(customerId: string, orderId: string): Promise<IPayment> {
@@ -65,7 +68,7 @@ export class CreatePixPaymentUseCase {
       )
     }
 
-    return this.paymentsRepository.create({
+    const payment = await this.paymentsRepository.create({
       orderId: order.id,
       providerChargeId: charge.chargeId,
       amountCents: charge.amountCents,
@@ -73,5 +76,9 @@ export class CreatePixPaymentUseCase {
       platformFeeCents: charge.platformFeeCents,
       expiresAt: new Date(charge.expiresAt)
     })
+
+    await this.expiryScheduler.scheduleExpiry(payment.id, payment.expiresAt)
+
+    return payment
   }
 }

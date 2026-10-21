@@ -34,6 +34,41 @@ provider:
           Resource:
             - !GetAtt CustomerUserPool.Arn
             - !GetAtt RestaurantUserPool.Arn
+        - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt OrderEventsQueue.Arn
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.outboxRelayFunctionName}'
+        - Effect: Allow
+          Action: scheduler:CreateSchedule
+          Resource: !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/charge-expiry-*'
+        # O Scheduler invoca a Lambda com a role dele; criar o agendamento exige poder repassá-la.
+        - Effect: Allow
+          Action: iam:PassRole
+          Resource: !GetAtt ChargeExpirySchedulerRole.Arn
+
+custom:
+  outboxRelayFunctionName: ${self:service}-${sls:stage}-relayOutbox
+  settleChargesFunctionName: ${self:service}-${sls:stage}-settleCharges
+  # O ambiente de toda função que monta o container (src/config/env.ts). Os nomes das Lambdas são
+  # escritos à mão em vez de !GetAtt: a role referencia o relay, e o relay usa a role.
+  appEnvironment:
+    NODE_ENV: production
+    LOG_LEVEL: info
+    DATABASE_URL: ${ssm:/myfood/${sls:stage}/database-url}
+    COGNITO_CUSTOMER_POOL_ID: !Ref CustomerUserPool
+    COGNITO_CUSTOMER_CLIENT_ID: !Ref CustomerUserPoolClient
+    COGNITO_RESTAURANT_POOL_ID: !Ref RestaurantUserPool
+    COGNITO_RESTAURANT_CLIENT_ID: !Ref RestaurantUserPoolClient
+    S3_BUCKET: !Ref MediaBucket
+    SQS_IMAGE_PROCESSING_URL: !Ref ImageProcessingQueue
+    SQS_ORDER_EVENTS_URL: !Ref OrderEventsQueue
+    ABACATEPAY_API_KEY: ${ssm:/myfood/${sls:stage}/abacatepay-api-key}
+    ABACATEPAY_WEBHOOK_SECRET: ${ssm:/myfood/${sls:stage}/abacatepay-webhook-secret}
+    OUTBOX_RELAY_FUNCTION_NAME: ${self:custom.outboxRelayFunctionName}
+    SETTLE_CHARGES_FUNCTION_ARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.settleChargesFunctionName}'
+    CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: !GetAtt ChargeExpirySchedulerRole.Arn
 
 package:
   individually: true
@@ -78,21 +113,43 @@ functions:
     # O API Gateway HTTP corta em 30s; a Lambda termina antes para o erro ser nosso, não um 503.
     timeout: 29
     memorySize: 1024
-    environment:
-      NODE_ENV: production
-      LOG_LEVEL: info
-      DATABASE_URL: ${ssm:/myfood/${sls:stage}/database-url}
-      COGNITO_CUSTOMER_POOL_ID: !Ref CustomerUserPool
-      COGNITO_CUSTOMER_CLIENT_ID: !Ref CustomerUserPoolClient
-      COGNITO_RESTAURANT_POOL_ID: !Ref RestaurantUserPool
-      COGNITO_RESTAURANT_CLIENT_ID: !Ref RestaurantUserPoolClient
-      S3_BUCKET: !Ref MediaBucket
-      SQS_IMAGE_PROCESSING_URL: !Ref ImageProcessingQueue
-      SQS_ORDER_EVENTS_URL: !Ref OrderEventsQueue
-      ABACATEPAY_API_KEY: ${ssm:/myfood/${sls:stage}/abacatepay-api-key}
-      ABACATEPAY_WEBHOOK_SECRET: ${ssm:/myfood/${sls:stage}/abacatepay-webhook-secret}
+    environment: ${self:custom.appEnvironment}
     events:
       - httpApi: '*'
+
+  # Nenhuma das três consulta o banco por conta própria em intervalo curto: o Neon só desliga o
+  # compute depois de 5 minutos parado, e um cron de minuto o manteria ligado o mês inteiro,
+  # acima da cota gratuita de CU-horas. O trabalho chega por evento; o cron horário é só a rede.
+  relayOutbox:
+    handler: src/lambda/relay-outbox.handler
+    name: ${self:custom.outboxRelayFunctionName}
+    timeout: 60
+    memorySize: 512
+    environment: ${self:custom.appEnvironment}
+    events:
+      - schedule: rate(1 hour)
+
+  orderEvents:
+    handler: src/lambda/order-events.handler
+    # O VisibilityTimeout da fila (60s) precisa ser pelo menos 6x este valor, como a AWS recomenda
+    # para fila com trigger: abaixo disso, mensagem em processamento reaparece e roda duas vezes.
+    timeout: 10
+    memorySize: 512
+    environment: ${self:custom.appEnvironment}
+    events:
+      - sqs:
+          arn: !GetAtt OrderEventsQueue.Arn
+          batchSize: 10
+          functionResponseType: ReportBatchItemFailures
+
+  settleCharges:
+    handler: src/lambda/settle-charges.handler
+    name: ${self:custom.settleChargesFunctionName}
+    timeout: 60
+    memorySize: 512
+    environment: ${self:custom.appEnvironment}
+    events:
+      - schedule: rate(1 hour)
 
   cognitoCustomMessage:
     handler: src/lambda/cognito-custom-message.handler
@@ -323,6 +380,26 @@ resources:
           deadLetterTargetArn: !GetAtt OrderEventsDLQ.Arn
           maxReceiveCount: 5
 
+    ChargeExpirySchedulerRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: scheduler.amazonaws.com
+              Action: sts:AssumeRole
+              Condition:
+                StringEquals:
+                  aws:SourceAccount: !Ref AWS::AccountId
+        Policies:
+          - PolicyName: invoke-settle-charges
+            PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action: lambda:InvokeFunction
+                  Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.settleChargesFunctionName}'
+
   extensions:
     # Limite por conta inteira, antes da Lambda. O @fastify/rate-limit conta por instância e não
     # vê as outras, então sozinho ele não segura uma rajada.
@@ -333,6 +410,12 @@ resources:
           ThrottlingRateLimit: 20
 
   Outputs:
+    OutboxRelayFunctionName:
+      Value: ${self:custom.outboxRelayFunctionName}
+    SettleChargesFunctionArn:
+      Value: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${self:custom.settleChargesFunctionName}'
+    ChargeExpirySchedulerRoleArn:
+      Value: !GetAtt ChargeExpirySchedulerRole.Arn
     CustomerUserPoolId:
       Value: !Ref CustomerUserPool
     CustomerUserPoolClientId:

@@ -4,7 +4,7 @@ import type { IOrderNotificationTarget } from '@/application/interfaces/IOrdersR
 import type { IPushTokensRepository } from '@/application/interfaces/IPushTokensRepository.js'
 import { NotifyOrderChangeUseCase } from '@/application/useCases/notifications/NotifyOrderChangeUseCase.js'
 import { InMemoryOrderStream } from '@/infra/streams/InMemoryOrderStream.js'
-import { FakePushGateway } from '../../support/fakes/index.js'
+import { FakeOutboxRelayTrigger, FakePushGateway } from '../../support/fakes/index.js'
 
 const order: IOrderNotificationTarget = {
   id: 'o1',
@@ -30,9 +30,10 @@ function setup() {
   } as unknown as IPushTokensRepository
 
   const push = new FakePushGateway()
-  const notify = new NotifyOrderChangeUseCase(stream, pushTokens, push)
+  const outboxRelay = new FakeOutboxRelayTrigger()
+  const notify = new NotifyOrderChangeUseCase(stream, pushTokens, push, outboxRelay)
 
-  return { notify, events, push, deleted }
+  return { notify, events, push, deleted, outboxRelay }
 }
 
 describe('NotifyOrderChangeUseCase', () => {
@@ -86,5 +87,14 @@ describe('NotifyOrderChangeUseCase', () => {
     await notify.execute({ change: 'STATUS_CHANGED', actor: 'OWNER', order })
 
     expect(deleted).toEqual(['driver-token'])
+  })
+
+  it('should wake the outbox relay after every committed change', async () => {
+    const { notify, outboxRelay } = setup()
+
+    await notify.execute({ change: 'STATUS_CHANGED', actor: 'OWNER', order })
+    await notify.execute({ change: 'PAYMENT_CONFIRMED', actor: 'SYSTEM', order })
+
+    expect(outboxRelay.wakes).toBe(2)
   })
 })

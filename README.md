@@ -167,22 +167,32 @@ schemas and published to GitHub Pages; it is also served at `/docs` on a local A
 
 ## Running the full stack
 
-The whole backend is serverless: the API and the background jobs are Lambdas behind an API Gateway
-HTTP API, provisioned with the Serverless Framework, and the database is Neon. There is one stage,
-`dev`. Locally only the API server runs, against that same database and those same AWS resources.
+The whole backend is serverless: the API and the background jobs are Lambdas behind API Gateway
+(HTTP and WebSocket), provisioned with the Serverless Framework, and the database is Neon. There is
+one stage, `dev`, and no public deployment. Locally only the API server runs, against that same
+database and those same AWS resources, so it and the Lambdas always see the same data.
+
+AWS credentials come from the SDK's default chain (an SSO profile works); nothing reads access keys
+from `.env`. The deploy reads three SecureString parameters from SSM Parameter Store:
+`/myfood/dev/database-url` (Neon's pooled URL), `/myfood/dev/abacatepay-api-key` and
+`/myfood/dev/abacatepay-webhook-secret`.
 
 ```bash
 pnpm install
 cp .env.example .env        # the Neon URLs; the rest comes from the stack outputs
 
-# The database URL and the AbacatePay secrets live in SSM Parameter Store under /myfood/dev/.
-pnpm run deploy             # Cognito, S3, SQS, the API Gateway and every Lambda
+pnpm run deploy             # Cognito, S3, SQS, DynamoDB, both API Gateways and every Lambda
 pnpm db:migrate
-pnpm db:seed                # optional: restaurants, customers and order history
 pnpm dev                    # the API on :3333, with reload
+pnpm db:seed                # optional, in another terminal: it signs up through the local API
 ```
 
-Always deploy with `pnpm run deploy`: it rebuilds the Lambda layer for `sharp` first.
+Always deploy with `pnpm run deploy`: it rebuilds the Lambda layer for `sharp` first. The seed
+creates restaurants, customers and two months of orders; against a remote database its last step,
+applying 6k analytics events one by one, takes around 40 minutes.
+
+The dashboard and the app can call either the local server or the deployed API, the `HttpApiUrl`
+output of the `myfood-api-dev` stack.
 
 | Script | What it does |
 |---|---|

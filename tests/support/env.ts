@@ -21,6 +21,10 @@ export function buildTestEnv(databaseUrl: string): Env {
     SETTLE_CHARGES_FUNCTION_ARN:
       'arn:aws:lambda:us-east-1:000000000000:function:myfood-api-test-settleCharges',
     CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: 'arn:aws:iam::000000000000:role/myfood-test-scheduler',
+    REALTIME_URL: 'wss://realtime.test/dev',
+    REALTIME_CALLBACK_URL: 'https://realtime.test/dev',
+    REALTIME_CONNECTIONS_TABLE: 'myfood-test-realtime-connections',
+    REALTIME_TICKETS_TABLE: 'myfood-test-realtime-tickets',
     MEDIA_BASE_URL: 'https://media.test',
     ABACATEPAY_API_URL: 'https://abacatepay.test',
     ABACATEPAY_API_KEY: 'test-key',

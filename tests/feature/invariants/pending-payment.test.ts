@@ -15,10 +15,7 @@ describe('an order waiting for payment is invisible to the restaurant (§12)', (
     await drainOutbox(t)
 
     const reads = listOperations(t.app).filter(
-      ({ method, path }) =>
-        method === 'GET' &&
-        path.startsWith('/restaurants/{restaurantId}') &&
-        !path.endsWith('/stream')
+      ({ method, path }) => method === 'GET' && path.startsWith('/restaurants/{restaurantId}')
     )
     const leaks: string[] = []
 

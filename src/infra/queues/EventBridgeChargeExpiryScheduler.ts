@@ -5,7 +5,6 @@ import {
 } from '@aws-sdk/client-scheduler'
 import { pino } from 'pino'
 import type { IChargeExpiryScheduler } from '@/application/interfaces/IChargeExpiryScheduler.js'
-import type { IAwsCredentials } from '@/config/aws.js'
 
 // A varredura só pega cobrança com expires_at no passado: disparar no segundo exato do vencimento
 // poderia encontrá-la ainda válida e não fazer nada.
@@ -24,10 +23,9 @@ export class EventBridgeChargeExpiryScheduler implements IChargeExpiryScheduler 
   constructor(
     private readonly targetFunctionArn: string,
     private readonly roleArn: string,
-    region: string,
-    credentials?: IAwsCredentials
+    region: string
   ) {
-    this.client = new SchedulerClient({ region, ...(credentials ? { credentials } : {}) })
+    this.client = new SchedulerClient({ region })
   }
 
   async scheduleExpiry(chargeId: string, expiresAt: string): Promise<void> {

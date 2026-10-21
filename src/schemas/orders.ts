@@ -185,6 +185,12 @@ export const orderStreamEventSchema = z.object({
   occurredAt: z.iso.datetime()
 })
 
+export const orderStreamTicketResponseSchema = z.object({
+  url: z.string().describe('URL wss:// do stream; conecte em `url?ticket=<ticket>`'),
+  ticket: z.string().describe('Uso único, vence em `expiresAt`'),
+  expiresAt: z.iso.datetime()
+})
+
 export function toRestaurantOrderResponse(
   order: IRestaurantOrder
 ): z.infer<typeof restaurantOrderResponseSchema> {

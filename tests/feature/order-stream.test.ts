@@ -1,5 +1,4 @@
-import type { AddressInfo } from 'node:net'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { orderStreamEventSchema } from '@/schemas/orders.js'
 import { setupTestApp } from '../support/app.js'
 import { expectNoDeliveryCode } from '../support/assertions.js'
@@ -7,118 +6,74 @@ import { advanceOrderTo, createOrderingScenario, placeOrder } from '../support/s
 
 const t = setupTestApp()
 
-let baseUrl: string
-
-beforeAll(async () => {
-  await t.app.listen({ host: '127.0.0.1', port: 0 })
-  baseUrl = `http://127.0.0.1:${(t.app.server.address() as AddressInfo).port}`
-})
-
-async function openStream(restaurantId: string, token: string) {
-  const controller = new AbortController()
-  const response = await fetch(`${baseUrl}/restaurants/${restaurantId}/orders/stream`, {
-    headers: { authorization: `Bearer ${token}` },
-    signal: controller.signal
-  })
-  const reader = response.body?.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  return {
-    response,
-    close: () => controller.abort(),
-    async nextEvents(count: number): Promise<{ event: string; data: unknown }[]> {
-      const events: { event: string; data: unknown }[] = []
-
-      while (events.length < count && reader) {
-        let boundary = buffer.indexOf('\n\n')
-
-        while (boundary >= 0) {
-          const block = buffer.slice(0, boundary)
-          buffer = buffer.slice(boundary + 2)
-          const event = /^event: (.+)$/m.exec(block)?.[1]
-          const data = /^data: (.+)$/m.exec(block)?.[1]
-
-          if (event && data) {
-            events.push({ event, data: JSON.parse(data) })
-          }
-
-          boundary = buffer.indexOf('\n\n')
-        }
-
-        if (events.length >= count) break
-
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-      }
-
-      return events
-    }
-  }
-}
-
-describe('order stream (SSE)', () => {
-  it('should push narrow events for new orders and status changes, never the delivery code', async () => {
+describe('order stream', () => {
+  it('should publish narrow events for new orders and status changes, never the delivery code', async () => {
     const s = await createOrderingScenario(t)
-    const stream = await openStream(s.restaurant.id, s.owner.token)
 
-    try {
-      expect(stream.response.status).toBe(200)
-      expect(stream.response.headers.get('content-type')).toBe('text/event-stream')
+    const order = await placeOrder(t, s)
+    await advanceOrderTo(t, s, order.id, 'CONFIRMED')
+    const events = t.fakes.orderStream.eventsFor(s.restaurant.id)
 
-      const order = await placeOrder(t, s)
-      await advanceOrderTo(t, s, order.id, 'CONFIRMED')
-      const events = await stream.nextEvents(2)
-
-      expect(events.map(({ event }) => event)).toEqual(['ORDER_PLACED', 'ORDER_STATUS_CHANGED'])
-      for (const { data } of events) {
-        expect(orderStreamEventSchema.strict().parse(data)).toMatchObject({ orderId: order.id })
-        expectNoDeliveryCode(data, order.deliveryCode)
-      }
-    } finally {
-      stream.close()
+    expect(events.map(({ type }) => type)).toEqual(['ORDER_PLACED', 'ORDER_STATUS_CHANGED'])
+    for (const event of events) {
+      expect(orderStreamEventSchema.strict().parse(event)).toMatchObject({ orderId: order.id })
+      expectNoDeliveryCode(event, order.deliveryCode)
     }
   })
 
   it('should not announce an order waiting for payment', async () => {
     const s = await createOrderingScenario(t)
-    const stream = await openStream(s.restaurant.id, s.owner.token)
 
-    try {
-      await placeOrder(t, s, { paymentMethod: 'ONLINE' })
-      const cash = await placeOrder(t, s)
-      const [first] = await stream.nextEvents(1)
+    await placeOrder(t, s, { paymentMethod: 'ONLINE' })
+    const cash = await placeOrder(t, s)
 
-      expect(first?.data).toMatchObject({ orderId: cash.id })
-    } finally {
-      stream.close()
-    }
+    expect(t.fakes.orderStream.eventsFor(s.restaurant.id)).toEqual([
+      expect.objectContaining({ orderId: cash.id })
+    ])
   })
 
-  it("should only stream the restaurant's own orders", async () => {
+  it("should only publish to the order's own restaurant", async () => {
     const s = await createOrderingScenario(t)
     const other = await createOrderingScenario(t)
-    const stream = await openStream(s.restaurant.id, s.owner.token)
 
-    try {
-      await placeOrder(t, other)
-      const own = await placeOrder(t, s)
-      const [first] = await stream.nextEvents(1)
+    await placeOrder(t, other)
 
-      expect(first?.data).toMatchObject({ orderId: own.id })
-    } finally {
-      stream.close()
-    }
+    expect(t.fakes.orderStream.eventsFor(s.restaurant.id)).toEqual([])
   })
+})
 
-  it('should refuse a driver', async () => {
+describe('order stream ticket', () => {
+  it('should issue a single-use ticket for the owner, bound to the restaurant', async () => {
     const s = await createOrderingScenario(t)
 
-    const response = await fetch(`${baseUrl}/restaurants/${s.restaurant.id}/orders/stream`, {
-      headers: { authorization: `Bearer ${s.driver.token}` }
-    })
+    const response = await t.request(
+      'POST',
+      `/restaurants/${s.restaurant.id}/orders/stream-ticket`,
+      {
+        token: s.owner.token
+      }
+    )
 
-    expect(response.status).toBe(403)
+    expect(response.statusCode).toBe(201)
+    expect(response.json()).toMatchObject({ url: 'wss://realtime.test/dev' })
+    expect(t.fakes.orderStreamTickets.issued.get(response.json().ticket)).toBe(s.restaurant.id)
+  })
+
+  it('should refuse a driver and the owner of another restaurant', async () => {
+    const s = await createOrderingScenario(t)
+    const other = await createOrderingScenario(t)
+
+    const driver = await t.request('POST', `/restaurants/${s.restaurant.id}/orders/stream-ticket`, {
+      token: s.driver.token
+    })
+    const stranger = await t.request(
+      'POST',
+      `/restaurants/${s.restaurant.id}/orders/stream-ticket`,
+      { token: other.owner.token }
+    )
+
+    expect(driver.statusCode).toBe(403)
+    expect(stranger.statusCode).toBe(403)
+    expect(t.fakes.orderStreamTickets.issued.size).toBe(0)
   })
 })

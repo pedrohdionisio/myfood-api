@@ -1,9 +1,11 @@
+import { ApiGatewayManagementApiClient } from '@aws-sdk/client-apigatewaymanagementapi'
 import { type DependencyContainer, Lifecycle, container as rootContainer } from 'tsyringe'
 import type { IAuthGateway } from '@/application/interfaces/IAuthGateway.js'
 import type { IChargeExpiryScheduler } from '@/application/interfaces/IChargeExpiryScheduler.js'
 import type { IEventPublisher } from '@/application/interfaces/IEventPublisher.js'
 import type { IImageProcessor } from '@/application/interfaces/IImageProcessor.js'
 import type { IOrderStream } from '@/application/interfaces/IOrderStream.js'
+import type { IOrderStreamTickets } from '@/application/interfaces/IOrderStreamTickets.js'
 import type { IOutboxRelayTrigger } from '@/application/interfaces/IOutboxRelayTrigger.js'
 import type { IPaymentGateway } from '@/application/interfaces/IPaymentGateway.js'
 import type { IPushGateway } from '@/application/interfaces/IPushGateway.js'
@@ -51,6 +53,7 @@ import { ChangeOrderStatusUseCase } from '@/application/useCases/orders/ChangeOr
 import { CreateOrderUseCase } from '@/application/useCases/orders/CreateOrderUseCase.js'
 import { DispatchOrderUseCase } from '@/application/useCases/orders/DispatchOrderUseCase.js'
 import { GetCustomerOrderUseCase } from '@/application/useCases/orders/GetCustomerOrderUseCase.js'
+import { IssueOrderStreamTicketUseCase } from '@/application/useCases/orders/IssueOrderStreamTicketUseCase.js'
 import { ListCustomerOrdersUseCase } from '@/application/useCases/orders/ListCustomerOrdersUseCase.js'
 import { ListRestaurantOrdersUseCase } from '@/application/useCases/orders/ListRestaurantOrdersUseCase.js'
 import { CreatePixPaymentUseCase } from '@/application/useCases/payments/CreatePixPaymentUseCase.js'
@@ -79,7 +82,6 @@ import { ListRestaurantReviewsUseCase } from '@/application/useCases/reviews/Lis
 import { ReplyToReviewUseCase } from '@/application/useCases/reviews/ReplyToReviewUseCase.js'
 import { CreateImageUploadUseCase } from '@/application/useCases/uploads/CreateImageUploadUseCase.js'
 import { ProcessImageVariantsUseCase } from '@/application/useCases/uploads/ProcessImageVariantsUseCase.js'
-import { awsCredentials } from '@/config/aws.js'
 import type { Env } from '@/config/env.js'
 import { createDatabaseConnection, type IDatabaseConnection } from '@/db/client.js'
 import { AbacatePayPaymentGateway } from '@/infra/gateways/AbacatePayPaymentGateway.js'
@@ -91,6 +93,8 @@ import { SharpImageProcessor } from '@/infra/gateways/SharpImageProcessor.js'
 import { EventBridgeChargeExpiryScheduler } from '@/infra/queues/EventBridgeChargeExpiryScheduler.js'
 import { LambdaOutboxRelayTrigger } from '@/infra/queues/LambdaOutboxRelayTrigger.js'
 import { SqsEventPublisher } from '@/infra/queues/SqsEventPublisher.js'
+import { DynamoRealtimeStore } from '@/infra/realtime/DynamoRealtimeStore.js'
+import { WebSocketOrderStream } from '@/infra/realtime/WebSocketOrderStream.js'
 import { DrizzleAnalyticsRepository } from '@/infra/repositories/DrizzleAnalyticsRepository.js'
 import { DrizzleCuisinesRepository } from '@/infra/repositories/DrizzleCuisinesRepository.js'
 import { DrizzleCustomerAddressesRepository } from '@/infra/repositories/DrizzleCustomerAddressesRepository.js'
@@ -106,7 +110,6 @@ import { DrizzlePushTokensRepository } from '@/infra/repositories/DrizzlePushTok
 import { DrizzleRestaurantsRepository } from '@/infra/repositories/DrizzleRestaurantsRepository.js'
 import { DrizzleRestaurantUsersRepository } from '@/infra/repositories/DrizzleRestaurantUsersRepository.js'
 import { DrizzleReviewsRepository } from '@/infra/repositories/DrizzleReviewsRepository.js'
-import { InMemoryOrderStream } from '@/infra/streams/InMemoryOrderStream.js'
 import { TOKENS } from './tokens.js'
 
 const SINGLETONS: [symbol, new (...args: never[]) => unknown][] = [
@@ -189,6 +192,7 @@ const SINGLETONS: [symbol, new (...args: never[]) => unknown][] = [
   [TOKENS.AnalyticsRepository, DrizzleAnalyticsRepository],
   [TOKENS.ProcessOrderEventUseCase, ProcessOrderEventUseCase],
   [TOKENS.RelayOutboxUseCase, RelayOutboxUseCase],
+  [TOKENS.IssueOrderStreamTicketUseCase, IssueOrderStreamTicketUseCase],
   [TOKENS.GetAnalyticsUseCase, GetAnalyticsUseCase],
   [TOKENS.CreateImageUploadUseCase, CreateImageUploadUseCase],
   [TOKENS.ProcessImageVariantsUseCase, ProcessImageVariantsUseCase]
@@ -206,10 +210,15 @@ export interface IAdapters {
   eventPublisher: IEventPublisher
   outboxRelayTrigger: IOutboxRelayTrigger
   chargeExpiryScheduler: IChargeExpiryScheduler
+  orderStream: IOrderStream
+  orderStreamTickets: IOrderStreamTickets
 }
 
 export function buildAdapters(env: Env): IAdapters {
-  const credentials = awsCredentials(env)
+  const realtimeStore = new DynamoRealtimeStore(
+    { connections: env.REALTIME_CONNECTIONS_TABLE, tickets: env.REALTIME_TICKETS_TABLE },
+    env.AWS_REGION
+  )
 
   return {
     // Dois pools, dois verificadores. Um token do app de cliente não passa no verificador do
@@ -225,31 +234,35 @@ export function buildAdapters(env: Env): IAdapters {
     customerAuthGateway: new CognitoAuthGateway(
       env.COGNITO_CUSTOMER_POOL_ID,
       env.COGNITO_CUSTOMER_CLIENT_ID,
-      env.AWS_REGION,
-      credentials
+      env.AWS_REGION
     ),
     restaurantAuthGateway: new CognitoAuthGateway(
       env.COGNITO_RESTAURANT_POOL_ID,
       env.COGNITO_RESTAURANT_CLIENT_ID,
-      env.AWS_REGION,
-      credentials
+      env.AWS_REGION
     ),
-    storageGateway: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION, credentials),
+    storageGateway: new S3StorageGateway(env.S3_BUCKET, env.AWS_REGION),
     imageProcessor: new SharpImageProcessor(),
     paymentGateway: new AbacatePayPaymentGateway(env.ABACATEPAY_API_URL, env.ABACATEPAY_API_KEY),
     pushGateway: new ExpoPushGateway(env.EXPO_ACCESS_TOKEN),
-    eventPublisher: new SqsEventPublisher(env.SQS_ORDER_EVENTS_URL, env.AWS_REGION, credentials),
+    eventPublisher: new SqsEventPublisher(env.SQS_ORDER_EVENTS_URL, env.AWS_REGION),
     outboxRelayTrigger: new LambdaOutboxRelayTrigger(
       env.OUTBOX_RELAY_FUNCTION_NAME,
-      env.AWS_REGION,
-      credentials
+      env.AWS_REGION
     ),
     chargeExpiryScheduler: new EventBridgeChargeExpiryScheduler(
       env.SETTLE_CHARGES_FUNCTION_ARN,
       env.CHARGE_EXPIRY_SCHEDULER_ROLE_ARN,
-      env.AWS_REGION,
-      credentials
-    )
+      env.AWS_REGION
+    ),
+    orderStream: new WebSocketOrderStream(
+      realtimeStore,
+      new ApiGatewayManagementApiClient({
+        endpoint: env.REALTIME_CALLBACK_URL,
+        region: env.AWS_REGION
+      })
+    ),
+    orderStreamTickets: realtimeStore
   }
 }
 
@@ -296,10 +309,11 @@ export function buildContainer(
     useValue: env.PAYMENT_PIX_EXPIRES_IN_SECONDS
   })
 
-  // O stream vive na memória do processo: só entrega aos SSE abertos nesta instância da API.
-  // Numa Lambda de background ele existe e não tem ouvintes — o dashboard vê aquela mudança no
-  // próximo refetch.
-  container.register<IOrderStream>(TOKENS.OrderStream, { useValue: new InMemoryOrderStream() })
+  container.register<IOrderStream>(TOKENS.OrderStream, { useValue: adapters.orderStream })
+  container.register<IOrderStreamTickets>(TOKENS.OrderStreamTickets, {
+    useValue: adapters.orderStreamTickets
+  })
+  container.register<string>(TOKENS.RealtimeUrl, { useValue: env.REALTIME_URL })
 
   container.register(TOKENS.RefreshCustomerSessionUseCase, {
     useValue: new RefreshSessionUseCase(customerAuthGateway)

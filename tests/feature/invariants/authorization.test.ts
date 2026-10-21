@@ -19,10 +19,7 @@ const QUERY = { from: '2026-09-01', to: '2026-09-02', q: 'pizza' }
 
 function securedGets(security: string) {
   return listOperations(t.app).filter(
-    (operation) =>
-      operation.method === 'GET' &&
-      operation.security.includes(security) &&
-      !operation.path.endsWith('/stream')
+    (operation) => operation.method === 'GET' && operation.security.includes(security)
   )
 }
 

@@ -51,7 +51,8 @@ The workflows are skills that orchestrate specialist subagents:
 - Node.js 24 + TypeScript (strict, legacy decorators) · Fastify + `fastify-type-provider-zod` ·
   `@fastify/swagger`
 - tsyringe · Drizzle ORM with `postgres.js` · PostgreSQL 16 (`pg_trgm`, `unaccent`)
-- AWS through Serverless Framework: Cognito, S3, SQS, API Gateway and Lambda · AbacatePay (Pix) · Expo push
+- AWS through Serverless Framework: Cognito, S3, SQS, API Gateway (HTTP + WebSocket), DynamoDB,
+  EventBridge Scheduler and Lambda · AbacatePay (Pix) · Expo push
 - Pino · Vitest + Testcontainers · Biome
 
 ## Runtime model
@@ -80,14 +81,15 @@ Nothing in `application` or `domain` imports Drizzle, Fastify or the AWS SDK.
 src/
   domain/        pure rules and types; imports nothing from the other layers
   application/   interfaces/ (ports, I*.ts) and useCases/ (one class per operation)
-  infra/         repositories/ (Drizzle), gateways/ (Cognito, S3, AbacatePay, Expo), queues/ (SQS)
+  infra/         repositories/ (Drizzle), gateways/ (Cognito, S3, AbacatePay, Expo),
+                 queues/ (SQS, Lambda, Scheduler), realtime/ (WebSocket + DynamoDB)
   di/            tokens.ts and container.ts, the composition root
   http/          app.ts, error-handler.ts, plugins/, routes/
   schemas/       Zod schemas — the HTTP contract, never reused as domain types
   config/        env, logger and AWS credentials
   db/            client.ts, schema/, migrations/
   lambda/        entry points: http (the API), relay-outbox, order-events, settle-charges,
-                 process-image, cognito-custom-message
+                 realtime-connections, process-image, cognito-custom-message
 ```
 
 ## Conventions
@@ -105,7 +107,8 @@ src/
 ## Non-negotiable rules
 
 1. **`orders.delivery_code` is visible only to the customer who owns the order.** Never in
-   restaurant or driver routes, SSE payloads, push text or logs (keep it in the Pino `redact`).
+   restaurant or driver routes, order stream (WebSocket) payloads, push text or logs (keep it in
+   the Pino `redact`).
    Only the customer's own order routes may declare it in a response schema;
    `tests/feature/invariants/` enforces it.
 2. **Never trust totals from the client.** Checkout recalculates prices, availability, city, fee

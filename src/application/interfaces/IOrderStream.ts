@@ -12,11 +12,11 @@ export interface IOrderStreamEvent {
   occurredAt: string
 }
 
-export type OrderStreamListener = (event: IOrderStreamEvent) => void
-
 export interface IOrderStream {
-  publish(restaurantId: string, event: IOrderStreamEvent): void
-
-  /** Devolve a função que cancela a inscrição; a rota SSE a chama quando o cliente desconecta. */
-  subscribe(restaurantId: string, listener: OrderStreamListener): () => void
+  /**
+   * Entrega o evento aos dashboards conectados ao restaurante. Nunca rejeita: a mudança já foi
+   * gravada, e o dashboard recarrega a lista ao reconectar, então um evento perdido não é um
+   * pedido perdido.
+   */
+  publish(restaurantId: string, event: IOrderStreamEvent): Promise<void>
 }

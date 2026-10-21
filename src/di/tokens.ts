@@ -14,6 +14,8 @@ export const TOKENS = {
   OutboxRelayTrigger: Symbol('OutboxRelayTrigger'),
   ChargeExpiryScheduler: Symbol('ChargeExpiryScheduler'),
   OrderStream: Symbol('OrderStream'),
+  OrderStreamTickets: Symbol('OrderStreamTickets'),
+  RealtimeUrl: Symbol('RealtimeUrl'),
   PaymentWebhookSecret: Symbol('PaymentWebhookSecret'),
   PixExpiresInSeconds: Symbol('PixExpiresInSeconds'),
 
@@ -76,6 +78,7 @@ export const TOKENS = {
   ListPublicReviewsUseCase: Symbol('ListPublicReviewsUseCase'),
   ProcessOrderEventUseCase: Symbol('ProcessOrderEventUseCase'),
   RelayOutboxUseCase: Symbol('RelayOutboxUseCase'),
+  IssueOrderStreamTicketUseCase: Symbol('IssueOrderStreamTicketUseCase'),
   GetAnalyticsUseCase: Symbol('GetAnalyticsUseCase'),
   UpdateRestaurantUseCase: Symbol('UpdateRestaurantUseCase'),
   ActivateRestaurantUseCase: Symbol('ActivateRestaurantUseCase'),

@@ -253,7 +253,7 @@ Gaps are acceptable — a rolled-back transaction burns a number. These are disp
 **Visibility:** only the customer who owns the order can see the code. The driver asks the customer for it on arrival. Enforcement is structural:
 
 - Response schemas declare the field only on the customer order route.
-- The restaurant SSE stream uses a dedicated, narrow DTO.
+- The restaurant WebSocket stream uses a dedicated, narrow DTO.
 - Pino `redact` covers the field.
 - Push notification text never includes it.
 - `tests/feature/invariants/` checks the OpenAPI spec for routes declaring the field and searches every restaurant and driver payload, stream event and push text for the code.
@@ -301,22 +301,31 @@ updated order, and each of them calls `NotifyOrderChangeUseCase` after the commi
 not the eight call sites — decides what the restaurant sees and what the customer is told, which is
 why the rules below are stated once and hold everywhere.
 
-**Restaurants: SSE** (`GET /restaurants/:restaurantId/orders/stream`, D3). One-directional, which is
-exactly what the dashboard needs, and plain HTTP. A WebSocket would force the transport decision now,
-and in-process WebSockets do not survive a move to Lambda.
+**Restaurants: WebSocket** through an API Gateway WebSocket API, with the open connections in
+DynamoDB (D23). The dashboard only listens; the socket exists because a Lambda cannot hold an SSE
+response open, and API Gateway is what keeps the connection while no code runs.
 
+- **Connecting takes a ticket, not a token.** The dashboard calls
+  `POST /restaurants/:restaurantId/orders/stream-ticket`, which runs the same `authenticate` +
+  `requireMembership('OWNER')` as every restaurant route (rule 5) and returns the socket URL and a
+  random ticket that lives 60 seconds. The `$connect` Lambda deletes the ticket with a condition
+  (exists, not expired) and registers the connection under the ticket's restaurant, so a ticket
+  works once. The browser cannot send `Authorization` on a WebSocket handshake, and a JWT in the
+  URL would end up in logs; the ticket also keeps the handshake from waking the database.
 - The event is a narrow DTO — `type`, `orderId`, `displayNumber`, `status`, `occurredAt` — and the
   dashboard reloads the order through the normal route. Nothing else travels on the stream, which is
   what keeps the delivery code out of it (rule 1).
 - An order in `PENDING_PAYMENT` is published to nobody: it does not exist for the restaurant (§12),
   and the stream is the one place where that could have leaked before the listing filters ran.
-- **The stream lives in the memory of the API process.** It reaches the SSE connections open on that
-  instance and no others. Inside a background Lambda it exists with no listeners, so an order confirmed by the
-  payments reconciliation (§12.4) reaches the dashboard on its next refetch, not through the stream.
-  A second API instance would need Postgres `LISTEN/NOTIFY` or Redis in place of the in-memory map;
-  the port (`IOrderStream`) is what that swap would touch.
-- `EventSource` cannot send headers, so the dashboard authenticates the stream with a fetch-based SSE
-  client. The token stays in `Authorization`, never in the query string, where it would be logged.
+- **Any Lambda can publish.** `WebSocketOrderStream` reads the restaurant's connections from the
+  table's `by-restaurant` index and posts to each through the API Gateway management API, so an
+  order confirmed by the payments reconciliation (§12.4) reaches the dashboard like any other. A
+  connection the gateway reports as gone (410) is deleted; a TTL removes the ones whose
+  `$disconnect` never arrived.
+- **Publishing is best effort**, like push: the change is committed, and the dashboard refetches
+  the list whenever it reconnects, so a dropped event is a late screen, never a lost order.
+- API Gateway closes an idle connection after 10 minutes and any connection after 2 hours. The
+  dashboard pings through the `$default` route and reconnects with a new ticket.
 
 **Customers: Expo push** on every status change, plus React Query refetching while an order is active.
 
@@ -422,7 +431,7 @@ Decisions taken while planning the implementation, with the reasoning kept short
 |---|---|
 | D1 | ~~No `payments` / `webhook_events` in the MVP~~ — superseded by D15. |
 | D2 | Checkout is idempotent through an `Idempotency-Key` header and the `idempotency_keys` table (§7.4). |
-| D3 | Dashboard real-time uses SSE, not WebSocket (§11). |
+| D3 | ~~Dashboard real-time uses SSE, not WebSocket~~ — superseded by D23. |
 | D4 | ~~Google Geocoding API behind a `Geocoder` port~~ — superseded by D13. ViaCEP still autocompletes the address text (§9). |
 | D5 | The client never calls Cognito. Sign-up, sign-in and refresh are API routes, and sign-up is a saga that deletes the Cognito account if the local write fails (§4). |
 | D6 | `DRAFT` → `ACTIVE` is self-service behind a completeness checklist; no platform admin role (§5). |
@@ -437,11 +446,12 @@ Decisions taken while planning the implementation, with the reasoning kept short
 | D15 | AbacatePay, Pix only, **no split**: the platform receives and the restaurant is paid outside the system, because the provider exposes no marketplace API (§12). |
 | D16 | The gateway sends no expiry event, so the settlement sweeps expired charges and reconciles them against the gateway before canceling (§12.4). |
 | D17 | Password recovery reuses Cognito's own `ForgotPassword`/`ConfirmForgotPassword` instead of a local code table; only the e-mail body is ours, through a `CustomMessage` trigger rendering react-email (§4). |
-| D18 | Stream and push are dispatched in-process, right after the commit, instead of through the outbox: the SSE connections live in the API process and would be unreachable from a background job, and the outbox carries three aggregate events, not every transition (§11). |
+| D18 | Stream and push are dispatched right after the commit, from the use case that made the change, instead of through the outbox: the outbox carries three aggregate events, not every transition, and both channels are best effort (§11). The original reason — SSE connections living in the API process — no longer holds since D23. |
 | D19 | The deployed database is Neon, in the same region as the Lambdas (`us-east-1`; moving both to `sa-east-1` is the fix if latency for Brazilian users proves to matter). There is one deployed stage, `dev`, and no production environment for now. The API connects through the pooled URL (PgBouncer, transaction mode, hence `prepare: false`); migrations use the direct URL (`DATABASE_URL_UNPOOLED`) and run from CI on `main`, before the deploy, so they must stay compatible with the code already running (§3). |
 | D20 | Cognito sends its own e-mails (`COGNITO_DEFAULT`) instead of SES. Sending through SES needs a verified domain and production access out of the SES sandbox, or only verified addresses receive the sign-up code; with no production environment, the 50 e-mails a day of the default sender are enough. Switching back is a change in `EmailConfiguration`, not in code. |
 | D21 | The API runs on Lambda behind an API Gateway HTTP API (`src/lambda/http.ts` with `@fastify/aws-lambda`), with one catch-all route. Secrets come from SSM Parameter Store, resolved at deploy time. Throttling is on the API Gateway stage: `@fastify/rate-limit` counts per instance and stays only as a second layer. |
 | D22 | Background jobs are Lambdas triggered by events, with an hourly sweep as the safety net, never by short-interval cron: a query every minute would keep Neon's compute from scaling to zero and exceed the free compute quota. The outbox relay is woken by an asynchronous invoke after the commit, the order-events consumer is an SQS event source mapping, and each Pix charge gets a one-time EventBridge Scheduler schedule at its expiry. Local development uses the same Neon database and AWS stage, so the server on the developer's machine and the Lambdas never disagree about which rows exist. |
+| D23 | Dashboard real-time moves from SSE to an API Gateway WebSocket API with the open connections in DynamoDB (on-demand, TTL), because a Lambda cannot keep an SSE response open. The handshake takes a single-use, 60-second ticket from an owner-only route instead of a JWT: authorization reuses the HTTP membership check, no token goes in a URL, and connecting never wakes the database. Publishing reads the restaurant's connections and posts through the management API, from any Lambda. Supersedes D3. |
 
 ## 14. Open questions
 

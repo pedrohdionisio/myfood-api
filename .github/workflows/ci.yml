@@ -27,6 +27,10 @@ jobs:
       OUTBOX_RELAY_FUNCTION_NAME: ci-relay-outbox
       SETTLE_CHARGES_FUNCTION_ARN: arn:aws:lambda:us-east-1:000000000000:function:ci-settle-charges
       CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: arn:aws:iam::000000000000:role/ci-scheduler
+      REALTIME_URL: wss://realtime.ci/dev
+      REALTIME_CALLBACK_URL: https://realtime.ci/dev
+      REALTIME_CONNECTIONS_TABLE: ci-realtime-connections
+      REALTIME_TICKETS_TABLE: ci-realtime-tickets
       ABACATEPAY_API_KEY: ci
       ABACATEPAY_WEBHOOK_SECRET: ci-webhook-secret-0123456789
 

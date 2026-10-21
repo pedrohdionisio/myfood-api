@@ -41,7 +41,8 @@ schema and error, generated from the code.
 - **Pix payments** (AbacatePay) with webhooks verified twice, deduplicated, and reconciled at each
   charge's expiry when a webhook is lost.
 - **Transactional outbox → SQS → idempotent consumers** keep the analytics aggregates exact.
-- **Real time** for restaurants over SSE, push notifications for customers and drivers over Expo.
+- **Real time** for restaurants over an API Gateway WebSocket, push notifications for customers and
+  drivers over Expo.
 - **Images** go straight to S3 with a presigned POST; a Lambda produces three WebP variants.
 - **80 documented operations**, generated from the same Zod schemas that validate every request and
   serialize every response.
@@ -62,7 +63,7 @@ flowchart LR
     expo["Expo Push"]
 
     app -->|REST| api
-    dash -->|"REST + SSE"| api
+    dash -->|"REST + WebSocket"| api
     dash -->|"image upload<br/>presigned POST"| s3
     api --> pg
     api -->|"sign-up, sign-in"| cognito
@@ -140,7 +141,7 @@ The full reasoning, with the alternatives considered, is in
 | Decision | Why |
 |---|---|
 | **Transactional outbox** instead of publishing to SQS from the request | The event row commits with the order, so an event is never lost and never sent for a rolled-back change. Consumers deduplicate by message id, so at-least-once delivery cannot double-count revenue. |
-| **SSE** for the restaurant dashboard, not WebSocket | The dashboard only listens. SSE is plain HTTP, reconnects on its own, and the event is a narrow DTO — the dashboard refetches the order, so nothing sensitive travels on the stream. |
+| **WebSocket with single-use tickets** for the restaurant dashboard | A Lambda cannot hold an SSE response open, so API Gateway keeps the socket and DynamoDB tracks who is connected. The dashboard trades its token for a 60-second ticket on an owner-only route, so the membership check is the HTTP one and no JWT ends up in a URL. The event is a narrow DTO — the dashboard refetches the order, so nothing sensitive travels on the socket. |
 | **Pix reconciliation** instead of trusting the webhook | The webhook is the fast path. At each charge's expiry, a Lambda asks the gateway for the real status before canceling an expired charge, and refunds a payment that arrives after the order was canceled. |
 | **Delivery code enforced by structure and by SQL** | Fastify serializes only declared fields, and only the customer's routes declare the code. Confirmation is one conditional `UPDATE`, with the attempt limit counted in the same locked transaction, so parallel guesses cannot get past it. |
 | **Membership checked in the database on every request** | Roles live in `restaurant_members`, not in token claims, so deactivating a driver takes effect on their next request, not when the token expires. |
@@ -158,8 +159,8 @@ pnpm test
 
 The feature suite starts a real PostgreSQL with Testcontainers, applies every migration and drives
 the whole application through its HTTP layer — sign-up, menu, checkout, the kitchen flow, delivery
-confirmation, Pix webhooks, analytics and the SSE stream — with Cognito, S3, AbacatePay and Expo
-replaced by in-memory fakes.
+confirmation, Pix webhooks, analytics and the order stream — with Cognito, S3, AbacatePay, Expo and
+the AWS services replaced by in-memory fakes.
 
 The [API reference](https://pedrohdionisio.github.io/myfood-api/api/) is generated from the route
 schemas and published to GitHub Pages; it is also served at `/docs` on a local API.
@@ -235,7 +236,8 @@ commits are in English.
 ## Stack
 
 Node.js 24 · TypeScript · Fastify · Zod · tsyringe · Drizzle ORM · PostgreSQL 16 (`pg_trgm`,
-`unaccent`) on Neon · AWS Lambda, API Gateway, Cognito, S3, SQS and EventBridge Scheduler ·
+`unaccent`) on Neon · AWS Lambda, API Gateway (HTTP and WebSocket), DynamoDB, Cognito, S3, SQS
+and EventBridge Scheduler ·
 Serverless Framework · AbacatePay · Expo Push
 · Pino · Vitest · Testcontainers · Biome · GitHub Actions
 

@@ -1,7 +1,6 @@
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda'
 import { pino } from 'pino'
 import type { IOutboxRelayTrigger } from '@/application/interfaces/IOutboxRelayTrigger.js'
-import type { IAwsCredentials } from '@/config/aws.js'
 
 const logger = pino().child({ gateway: 'outbox-relay-trigger' })
 
@@ -10,10 +9,9 @@ export class LambdaOutboxRelayTrigger implements IOutboxRelayTrigger {
 
   constructor(
     private readonly functionName: string,
-    region: string,
-    credentials?: IAwsCredentials
+    region: string
   ) {
-    this.client = new LambdaClient({ region, ...(credentials ? { credentials } : {}) })
+    this.client = new LambdaClient({ region })
   }
 
   async wake(): Promise<void> {

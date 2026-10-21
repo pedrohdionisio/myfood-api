@@ -7,10 +7,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CognitoAuthGateway } from '@/infra/gateways/CognitoAuthGateway.js'
 
-const gateway = new CognitoAuthGateway('us-east-1_pool', 'client', 'us-east-1', {
-  accessKeyId: 'test',
-  secretAccessKey: 'test'
-})
+const gateway = new CognitoAuthGateway('us-east-1_pool', 'client', 'us-east-1')
 
 function cognitoFails(error: Error) {
   vi.spyOn(CognitoIdentityProviderClient.prototype, 'send').mockRejectedValue(error as never)

@@ -49,10 +49,7 @@ describe('delivery code never leaves the customer (rule 1)', () => {
     ])
 
     const ownerReads = listOperations(t.app).filter(
-      ({ method, path }) =>
-        method === 'GET' &&
-        path.startsWith('/restaurants/{restaurantId}') &&
-        !path.endsWith('/stream')
+      ({ method, path }) => method === 'GET' && path.startsWith('/restaurants/{restaurantId}')
     )
     for (const operation of ownerReads) {
       const response = await t.request(

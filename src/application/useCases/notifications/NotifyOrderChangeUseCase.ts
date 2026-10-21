@@ -41,7 +41,7 @@ export class NotifyOrderChangeUseCase {
     await this.outboxRelay.wake()
 
     if (isVisibleToRestaurant(order.status)) {
-      this.stream.publish(order.restaurantId, {
+      await this.stream.publish(order.restaurantId, {
         type: change === 'STATUS_CHANGED' ? 'ORDER_STATUS_CHANGED' : 'ORDER_PLACED',
         orderId: order.id,
         displayNumber: order.displayNumber,

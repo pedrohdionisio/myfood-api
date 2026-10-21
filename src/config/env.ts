@@ -27,6 +27,13 @@ const envSchema = z.object({
   SETTLE_CHARGES_FUNCTION_ARN: z.string().startsWith('arn:aws:lambda:'),
   CHARGE_EXPIRY_SCHEDULER_ROLE_ARN: z.string().startsWith('arn:aws:iam::'),
 
+  // Tempo real (D23): o dashboard conecta em REALTIME_URL com um ticket emitido pela API, e a API
+  // publica pela URL de callback do mesmo API Gateway WebSocket.
+  REALTIME_URL: z.url({ protocol: /^wss$/ }),
+  REALTIME_CALLBACK_URL: z.url({ protocol: /^https$/ }),
+  REALTIME_CONNECTIONS_TABLE: z.string().min(1),
+  REALTIME_TICKETS_TABLE: z.string().min(1),
+
   // A troca por um domínio de CDN é aqui: o resto do código só conhece esta base.
   MEDIA_BASE_URL: z.url().optional(),
 
@@ -37,12 +44,7 @@ const envSchema = z.object({
   PAYMENT_PIX_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1800),
 
   // Só é exigido pelo Expo quando a conta liga o modo de segurança reforçada no envio de push.
-  EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
-
-  // Opcionais: sem elas o SDK resolve pela cadeia padrão (~/.aws/credentials, IAM role).
-  // No container não há ~/.aws, então lá elas precisam vir do .env.
-  AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().min(1).optional()
+  EXPO_ACCESS_TOKEN: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)

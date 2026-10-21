@@ -6,17 +6,15 @@ import type {
   IPutObjectParams,
   IStorageGateway
 } from '@/application/interfaces/IStorageGateway.js'
-import type { IAwsCredentials } from '@/config/aws.js'
 
 export class S3StorageGateway implements IStorageGateway {
   private readonly client: S3Client
 
   constructor(
     private readonly bucket: string,
-    region: string,
-    credentials?: IAwsCredentials
+    region: string
   ) {
-    this.client = new S3Client({ region, ...(credentials ? { credentials } : {}) })
+    this.client = new S3Client({ region })
   }
 
   async createPresignedUpload(params: ICreatePresignedUploadParams): Promise<IPresignedUpload> {

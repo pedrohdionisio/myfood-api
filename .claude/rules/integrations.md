@@ -2,7 +2,7 @@
 paths:
   - "src/infra/gateways/**"
   - "src/infra/queues/**"
-  - "src/infra/streams/**"
+  - "src/infra/realtime/**"
   - "src/lambda/**"
   - "src/config/**"
   - "serverless.yml"
@@ -22,8 +22,9 @@ paths:
 - Auth routes must not reveal whether an account exists: a wrong code and an unknown user map to
   the same error, and `forgotPassword` swallows "user not found".
 - Push is best effort: `IPushGateway.send` never rejects.
-- AWS clients take credentials from `awsCredentials(env)` (`src/config/aws.ts`); without keys the
-  SDK uses the default chain.
+- AWS clients never take explicit credentials: the SDK's default chain resolves the Lambda role
+  in AWS and the SSO profile locally. Passing the role's `AWS_ACCESS_KEY_ID`/`SECRET` by hand drops
+  its session token and every call fails.
 
 ## Queues and outbox
 
@@ -38,7 +39,8 @@ paths:
 - The database is Neon (D19), so Lambdas may touch Postgres. `http.ts` is the API: it builds the
   container and the app once per instance, at module load, and hands them to
   `@fastify/aws-lambda`.
-- Lambdas that do not need the database (image processing, the Cognito `CustomMessage` trigger)
+- Lambdas that do not need the database (image processing, the Cognito `CustomMessage` trigger,
+  the WebSocket handshake in `realtime-connections.ts`)
   stay thin shells over a use case: no DI container, no `config/env.ts`; they validate their own
   env with Zod and build their adapters by hand, so they boot without `DATABASE_URL`.
 - `sharp` is imported lazily inside `SharpImageProcessor`. Its JS is bundled, but its native

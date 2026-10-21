@@ -1,16 +1,14 @@
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs'
 import type { IEventPublisher, IOutboxEvent } from '@/application/interfaces/IEventPublisher.js'
-import type { IAwsCredentials } from '@/config/aws.js'
 
 export class SqsEventPublisher implements IEventPublisher {
   private readonly client: SQSClient
 
   constructor(
     private readonly queueUrl: string,
-    region: string,
-    credentials?: IAwsCredentials
+    region: string
   ) {
-    this.client = new SQSClient({ region, ...(credentials ? { credentials } : {}) })
+    this.client = new SQSClient({ region })
   }
 
   async publish(event: IOutboxEvent): Promise<void> {

@@ -14563,13 +14563,13 @@
         }
       }
     },
-    "/restaurants/{restaurantId}/orders/stream": {
-      "get": {
-        "summary": "Stream SSE dos pedidos do restaurante",
+    "/restaurants/{restaurantId}/orders/stream-ticket": {
+      "post": {
+        "summary": "Ticket para abrir o stream de pedidos em tempo real (WebSocket)",
         "tags": [
           "restaurant-orders"
         ],
-        "description": "text/event-stream com os eventos ORDER_PLACED e ORDER_STATUS_CHANGED. O evento traz só o suficiente para o dashboard recarregar o pedido — nunca o código de entrega. O EventSource do navegador não envia cabeçalhos, então o dashboard precisa de um cliente SSE sobre fetch para mandar o Authorization.",
+        "description": "Devolve a URL do WebSocket e um ticket de uso único que vence em 60 segundos. O dashboard conecta em `url?ticket=<ticket>` e passa a receber, como mensagens JSON, os eventos `{ type, orderId, displayNumber, status, occurredAt }`, com `type` ORDER_PLACED ou ORDER_STATUS_CHANGED. O evento traz só o suficiente para recarregar o pedido — nunca o código de entrega. O ticket existe porque o navegador não envia o Authorization no handshake do WebSocket, e um JWT na URL acabaria em logs.",
         "parameters": [
           {
             "schema": {
@@ -14588,57 +14588,31 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "type": {
+                    "url": {
                       "type": "string",
-                      "enum": [
-                        "ORDER_PLACED",
-                        "ORDER_STATUS_CHANGED"
-                      ]
+                      "description": "URL wss:// do stream; conecte em `url?ticket=<ticket>`"
                     },
-                    "orderId": {
+                    "ticket": {
                       "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      "description": "Uso único, vence em `expiresAt`"
                     },
-                    "displayNumber": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "PENDING_PAYMENT",
-                        "PENDING",
-                        "CONFIRMED",
-                        "PREPARING",
-                        "READY",
-                        "OUT_FOR_DELIVERY",
-                        "DELIVERED",
-                        "DELIVERY_FAILED",
-                        "REJECTED",
-                        "CANCELED"
-                      ]
-                    },
-                    "occurredAt": {
+                    "expiresAt": {
                       "type": "string",
                       "format": "date-time",
                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                     }
                   },
                   "required": [
-                    "type",
-                    "orderId",
-                    "displayNumber",
-                    "status",
-                    "occurredAt"
+                    "url",
+                    "ticket",
+                    "expiresAt"
                   ],
                   "additionalProperties": false
                 }
